@@ -8,6 +8,7 @@ from core.DE import DE_run_single_experiment
 from core.PSO import PSO_run_single_experiment
 from core.TS import TS_run_single_experiment
 from core.QTS import QTS_run_single_experiment
+from core.GA import GA_run_single_experiment
 def main():
     """
     Main execution entry point for Reversible Circuit Synthesis experiments.
@@ -20,7 +21,7 @@ def main():
     try:
         num_bits = int(input("Enter number of bits (n): "))
         problem_idx = int(input("Enter problem index: "))
-        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: DE, 3: PSO, 4: TS, 5: QTS, 6: Other): "))
+        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: DE, 3: PSO, 4: TS, 5: QTS, 6: GA, 7: Other): "))
     except ValueError:
         print("Invalid input. Please enter numeric values.")
         return
@@ -162,6 +163,29 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output
+            )
+
+        elif algo_choice == 6: # GA (Genetic Algorithm)
+
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate, best_circuit_this_run = GA_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                k = 3,
+                pc = 0.8, # 傳入交配率
+                pm = 0.02  # 傳入突變率
             )
 
         experiment_end_time = time.time()

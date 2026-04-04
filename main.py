@@ -184,8 +184,8 @@ def main():
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
                 k = 3,
-                pc = 0.8, # 傳入交配率
-                pm = 0.02  # 傳入突變率
+                pc = 0.8, # crossover
+                pm = 0.02  # mutation
             )
 
         experiment_end_time = time.time()

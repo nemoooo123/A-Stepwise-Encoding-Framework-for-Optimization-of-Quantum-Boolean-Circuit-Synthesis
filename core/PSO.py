@@ -1,7 +1,6 @@
 import numpy as np
 import copy
-import random
-from utils.init_state import gen_pso_init_states, repair_sequence_logic
+from utils.init_state import  repair_sequence_logic
 from utils.topology import decode_and_synthesize, verify_circuit_logic
 
 def PSO_run_single_experiment(
@@ -172,3 +171,258 @@ def pso_recursive_sync_update(v, x, pbest, gbest, w, c1, c2, keep_999):
     new_d = 1 if new_x > 0 else 0
     
     return new_v, new_x, new_d
+
+def gen_pso_init_states(pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, population_size):
+    """
+    Initialization function specifically designed for Particle Swarm Optimization (PSO).
+    Returns continuous random velocity matrices with the same structure as positions (range [-6, 6]).
+    """
+    # Particle swarm position containers (Continuous values for optimization)
+    pso_positions_l1, pso_positions_l2, pso_positions_l3, pso_positions_l4 = [], [], [], []
+    
+    # Particle swarm velocity containers (Movement vectors)
+    pso_velocities_l1, pso_velocities_l2, pso_velocities_l3, pso_velocities_l4 = [], [], [], []
+    
+    # Discretized solution containers (Mapped 0/1 bits for circuit synthesis)
+    discrete_solutions_l1, discrete_solutions_l2, discrete_solutions_l3, discrete_solutions_l4 = [], [], [], []
+    
+    for _ in range(population_size):
+        # Layer 1: Global selection layer
+        pos1, v1, disc1 = pso_layer_L1(pop_matrix1)
+        pso_positions_l1.append(pos1)
+        pso_velocities_l1.append(v1)
+        discrete_solutions_l1.append(disc1)
+
+        # Layer 2: Entry point selection layer
+        pos2, v2, disc2 = pso_layer_L2(pop_matrix2)
+        pso_positions_l2.append(pos2)
+        pso_velocities_l2.append(v2)
+        discrete_solutions_l2.append(disc2)
+
+        # Layer 3: Intermediate path node layer
+        pos3, v3, disc3 = pso_layer_L3(pop_matrix3)
+        pso_positions_l3.append(pos3)
+        pso_velocities_l3.append(v3)
+        discrete_solutions_l3.append(disc3)
+
+        # Layer 4: Gate sequence ordering layer
+        pos4, v4, disc4 = pso_layer_L4(pop_matrix4)
+        pso_positions_l4.append(pos4)
+        pso_velocities_l4.append(v4)
+        discrete_solutions_l4.append(disc4)
+        
+    # Return all hierarchical data as a tuple
+    return (pso_positions_l1, pso_velocities_l1, discrete_solutions_l1,
+            pso_positions_l2, pso_velocities_l2, discrete_solutions_l2,
+            pso_positions_l3, pso_velocities_l3, discrete_solutions_l3,
+            pso_positions_l4, pso_velocities_l4, discrete_solutions_l4)
+
+def pso_layer_L1(population_templates): 
+    """
+    Initialize Particle Swarm Optimization (PSO) Layer 1 components.
+    Generates:
+    1. Continuous initial positions within [-6, 6].
+    2. Initial velocity vectors within [-1, 1].
+    3. Discrete binary solutions based on a 0.5 sigmoid threshold (x > 0).
+    """
+    # initial_positions: Latent coordinates for the swarm to "fly" through (Continuous)
+    initial_positions = [] 
+    # initial_velocities: Movement vectors for the particles
+    initial_velocities = []
+    # initial_discrete_solutions: The actual 0/1 bits used for circuit synthesis (Discrete)
+    initial_discrete_solutions = []
+
+    # Iterate through each cycle's encoding structure
+    for cycle_idx in range(len(population_templates)): 
+        pos_code = []
+        vel_code = []
+        discrete_code = []
+        
+        # Iterate through each bit position defined in the template
+        for bit_idx in range(len(population_templates[cycle_idx])): 
+            # 1. Initialize Continuous Position: [-6, 6]
+            stochastic_pos = np.random.uniform(-6, 6)
+            
+            # 2. Initialize Velocity: [-1, 1]
+            stochastic_vel = np.random.uniform(-1, 1)
+            
+            # 3. Generate Discrete Solution: 
+            # Based on your requirement: If sigmoid(x) > 0.5 (which means x > 0), set to 1.
+            discrete_bit = 1 if stochastic_pos > 0 else 0
+            
+            pos_code.append(stochastic_pos)
+            vel_code.append(stochastic_vel)
+            discrete_code.append(discrete_bit)
+        
+        initial_positions.append(pos_code)
+        initial_velocities.append(vel_code)
+        initial_discrete_solutions.append(discrete_code)
+    
+    # Return all three components for the PSO population initialization
+    return initial_positions, initial_velocities, initial_discrete_solutions
+
+def pso_layer_L2(entry_point_templates):
+    """
+    Initialize Particle Swarm Optimization (PSO) Layer 2 components.
+    Generates:
+    1. Continuous initial positions within [-6, 6] for entry points.
+    2. Initial velocity vectors within [-1, 1].
+    3. Discrete entry point bits based on a 0.5 sigmoid threshold (x > 0).
+    """
+    # initial_positions: Latent coordinates for entry point optimization
+    initial_positions = []
+    # initial_velocities: Movement vectors for the swarm to explore the entry node space
+    initial_velocities = []
+    # initial_discrete_solutions: The binary entry point bits (0/1) for circuit synthesis
+    initial_discrete_solutions = []
+    
+    # Iterate through each cycle's entry point structure in Layer 2
+    for cycle_idx in range(len(entry_point_templates)):
+        pos_code = []
+        vel_code = []
+        discrete_code = []
+        
+        # Iterate through each bit defined in the entry point template 
+        for _ in entry_point_templates[cycle_idx]:
+            # 1. Initialize Continuous Position: Sigmoid sensitivity range [-6, 6]
+            stochastic_pos = np.random.uniform(-6, 6)
+            
+            # 2. Initialize Velocity: Initial search momentum [-1, 1]
+            stochastic_vel = np.random.uniform(-1, 1)
+            
+            # 3. Generate Discrete Solution: 
+            # Sigmoid(x) > 0.5 is mathematically equivalent to x > 0
+            discrete_bit = 1 if stochastic_pos > 0 else 0
+            
+            pos_code.append(stochastic_pos)
+            vel_code.append(stochastic_vel)
+            discrete_code.append(discrete_bit)
+
+        initial_positions.append(pos_code)
+        initial_velocities.append(vel_code)
+        initial_discrete_solutions.append(discrete_code)
+    
+    # Return synchronized Position, Velocity, and Discrete Solution for Layer 2 Swarm
+    return initial_positions, initial_velocities, initial_discrete_solutions
+
+def pso_layer_L3(path_node_templates):
+    """
+    Initialize Particle Swarm Optimization (PSO) Layer 3 components.
+    Generates:
+    1. Continuous positions within [-6, 6] for path nodes.
+    2. Initial velocity vectors within [-1, 1].
+    3. Discrete node bits (0/1) based on a 0.5 sigmoid threshold (x > 0).
+    Special markers (999) are preserved across all structures.
+    """
+    # initial_positions: Latent coordinates for the swarm to explore path combinations
+    initial_positions = []
+    # initial_velocities: Trajectory vectors for the path optimization
+    initial_velocities = []
+    # initial_discrete_solutions: Binary node representations for circuit logic evaluation
+    initial_discrete_solutions = []
+
+    # Iterate through each cycle component in Layer 3
+    for cycle_idx in range(len(path_node_templates)):
+        cycle_pos, cycle_vel, cycle_disc = [], [], []
+        
+        # Iterate through each transition step within the cycle
+        for step_idx in range(len(path_node_templates[cycle_idx])):
+            step_pos, step_vel, step_disc = [], [], []
+            
+            # Determine if this step is a direct transition (999) or requires intermediate nodes
+            substep_count = len(path_node_templates[cycle_idx][step_idx])
+            
+            for node_template in path_node_templates[cycle_idx][step_idx]:
+                if substep_count == 1:
+                    # Identifier 999: Direct Hamming distance jump. 
+                    # Preserve 999 in all three outputs to maintain structural alignment.
+                    step_pos.append(999)
+                    step_vel.append(999)
+                    step_disc.append(999)
+                else:
+                    node_pos, node_vel, node_disc = [], [], []
+                    
+                    # Perform bit-wise initialization for the node
+                    for _ in node_template:
+                        # 1. Continuous Position: [-6, 6]
+                        stochastic_pos = np.random.uniform(-6, 6)
+                        # 2. Velocity: [-1, 1]
+                        stochastic_vel = np.random.uniform(-1, 1)
+                        # 3. Discrete Solution: x > 0 is equivalent to Sigmoid(x) > 0.5
+                        discrete_bit = 1 if stochastic_pos > 0 else 0
+                        
+                        node_pos.append(stochastic_pos)
+                        node_vel.append(stochastic_vel)
+                        node_disc.append(discrete_bit)
+                    
+                    step_pos.append(node_pos)
+                    step_vel.append(node_vel)
+                    step_disc.append(node_disc)
+            
+            cycle_pos.append(step_pos)
+            cycle_vel.append(step_vel)
+            cycle_disc.append(step_disc)
+            
+        initial_positions.append(cycle_pos)
+        initial_velocities.append(cycle_vel)
+        initial_discrete_solutions.append(cycle_disc)
+
+    # Return synchronized Continuous Position, Velocity, and Discrete Solution for Layer 3
+    return initial_positions, initial_velocities, initial_discrete_solutions
+
+def pso_layer_L4(sequence_templates):
+    """
+    Initialize Particle Swarm Optimization (PSO) Layer 4 components.
+    Generates:
+    1. Continuous initial positions within [-6, 6] for sequencing decisions.
+    2. Initial velocity vectors within [-1, 1].
+    3. Repaired discrete binary solutions (0/1) for valid gate ordering.
+    """
+    # initial_positions: Latent coordinates for optimizing gate sequences
+    initial_positions = []
+    # initial_velocities: Trajectory vectors for the sequencing optimization
+    initial_velocities = []
+    # initial_discrete_solutions: Validated (repaired) binary sequences for circuit synthesis
+    initial_discrete_solutions = []
+    
+    # Iterate through each cycle's sequencing structure in Layer 4
+    for cycle_idx in range(len(sequence_templates)):
+        cycle_pos, cycle_vel, cycle_disc = [], [], []
+        
+        # Iterate through each transition step within the cycle
+        for step_idx in range(len(sequence_templates[cycle_idx])):
+            step_pos, step_vel, step_raw_disc = [], [], []
+            
+            # Iterate through the sequencing bits defined in the template
+            for bit_template in sequence_templates[cycle_idx][step_idx]:
+                # Check for the 999 fixed-sequence identifier
+                if bit_template[0] == 999:
+                    stochastic_pos = 999
+                    stochastic_vel = 999
+                    discrete_bit = 0 # Default state for fixed sequences (per original logic)
+                else:
+                    # 1. Initialize Position: [-6, 6]
+                    stochastic_pos = np.random.uniform(-6, 6)
+                    # 2. Initialize Velocity: [-1, 1]
+                    stochastic_vel = np.random.uniform(-1, 1)
+                    # 3. Initial Discrete Bit: Based on 0.5 threshold (x > 0)
+                    discrete_bit = 1 if stochastic_pos > 0 else 0
+                
+                step_pos.append(stochastic_pos)
+                step_vel.append(stochastic_vel)
+                step_raw_disc.append(discrete_bit)
+            
+            # --- 重要：執行序列修復邏輯 ---
+            # 確保初始化的二進位序列符合電路邏輯（例如閘的正反向平衡）
+            repaired_disc = repair_sequence_logic(step_raw_disc)
+            
+            cycle_pos.append(step_pos)
+            cycle_vel.append(step_vel)
+            cycle_disc.append(repaired_disc)
+            
+        initial_positions.append(cycle_pos)
+        initial_velocities.append(cycle_vel)
+        initial_discrete_solutions.append(cycle_disc)
+    
+    # Return synchronized Position, Velocity, and Validated Discrete Solution for Layer 4
+    return initial_positions, initial_velocities, initial_discrete_solutions

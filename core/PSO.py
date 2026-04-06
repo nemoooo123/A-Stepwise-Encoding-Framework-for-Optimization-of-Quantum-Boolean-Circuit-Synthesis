@@ -6,7 +6,7 @@ from utils.topology import decode_and_synthesize, verify_circuit_logic
 def PSO_run_single_experiment(
     max_iterations, rotation_cycles, num_neighbors, num_bits, base_trajectory,
     experiment_id, encoding_table, pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4,
-    fitness_history_matrix, target_output, w=0.8, c1=1.5, c2=1.5
+    fitness_history_matrix, target_output, w, c1, c2
 ):
     """
     Execute a single PSO experiment: Each neighbor is treated as a particle 

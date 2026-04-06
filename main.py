@@ -39,7 +39,7 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 10
+    num_experiments = 100
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
@@ -54,7 +54,7 @@ def main():
 
     
     for r in range(num_experiments):
-        #time count
+        # Track execution time for the current experiment trial
         experiment_start_time = time.time()
         # Step 1: Analyze permutation cycles in the truth table
         # check_zero_gate: Boolean to verify if the circuit requires any gates at all
@@ -89,7 +89,7 @@ def main():
             )
             
 
-        elif algo_choice == 2: # DE (Differential Evolution - Classical Metaheuristic)
+        elif algo_choice == 2: # DE (Differential Evolution - A population-based stochastic global optimizer)
             # Step 1: Initialize Encoding Fram
             pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
             
@@ -107,7 +107,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                CR = 0.01,
+                CR = 0.05,
             )
 
         elif algo_choice == 3: # PSO (Particle Swarm Optimization)
@@ -126,7 +126,8 @@ def main():
                 pop_matrix3 = pop_matrix3,
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output
+                target_output = target_output,
+                w=0.6,c1=3.0,c2=1.0
             )
         
         elif algo_choice == 4: # TS (Tubu Search) 
@@ -146,7 +147,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                tabu_size = 7
+                tabu_size = 55
             )
         
         elif algo_choice == 5: # QTS (Quantum-Inspired Tabu Search)
@@ -189,12 +190,13 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                k = 3,
-                pc = 0.8, # crossover
-                pm = 0.02  # mutation
+                k=3, 
+                pc=0.82, # crossover
+                pm=0.025 # mutation
+
             )
 
-        elif algo_choice == 7: # ABC
+        elif algo_choice == 7: # ABC(Artificial Bee Colony Algorithm)
 
             pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
             
@@ -212,7 +214,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                limit = 20
+                limit = 25
             )
         
         elif algo_choice == 8: # WOA (Whale Optimization Algorithm)
@@ -233,7 +235,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                b = 1.0  # Spiral Constant
+                b = 1.2  # Spiral Constant
             )
 
         elif algo_choice == 9: # QEA (Quantum Evolutionary Algorithm - Global Best Guided)
@@ -258,7 +260,7 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                delta_theta = 0.01  # Rotation step size for QEA state updates
+                delta_theta = 0.002  # Rotation step size for QEA state updates
             )
 
         experiment_end_time = time.time()
@@ -276,7 +278,7 @@ def main():
     std_convergence_curve = np.std(fitness_history_matrix, axis=0)
     
     global_min_gate = min(best_scores_per_experiment)
-    best_exp_index = best_scores_per_experiment.index(global_min_gate)
+    best_exp_index = best_scores_per_experiment.index(global_min_gate) # Identify the most successful trial
     absolute_best_circuit = best_circuit_per_experiment[best_exp_index]
     total_end_time = time.time()
     
@@ -340,7 +342,7 @@ def main():
         df.loc['Std_Deviation'] = stats_view.std()
         
         # 4. Manually fill the Execution Time average for the summary row
-        # We take the mean of all trials (excluding the newly added summary rows)
+        # Calculate the mean execution time across all successful trials
         trial_execution_times = df['Execution_Time(s)'].iloc[:-2] 
         df.at['Average_Convergence', 'Execution_Time(s)'] = trial_execution_times.mean()
         

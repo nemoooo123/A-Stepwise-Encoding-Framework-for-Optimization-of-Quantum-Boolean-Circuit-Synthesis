@@ -73,9 +73,9 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
     # Sort cycles based on Layer 1 priority (Descending)
     sorted_order = [idx for idx, _ in sorted(enumerate(priority_weights), key=lambda x: x[1], reverse=True)]
 
-    #0201每一個解 用斷邊和循環順序，先建立位置
+    # Initialize state positions for each solution using entry points and cycle sequences
     final_ops=[]
-    final_paths=[] #刷新裝
+    final_paths=[] # Buffer to store the refreshed path trajectories
      
     # Core Data Structures for Path Analysis
     path_indices = []       # Trajectory index mapping
@@ -161,8 +161,8 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
                             optimal_node = val
 
                 # Store the results of Strategy 3 search
-                if optimal_node!=-1: #有東西
-                    optimization_flags.append(strategy_type) #有
+                if optimal_node!=-1: # Valid alignment node detected
+                    optimization_flags.append(strategy_type) # Apply strategy-specific optimization flag
                     reduction_indices.append(optimal_node)
                 else:
                     optimization_flags.append(0)

@@ -1,5 +1,5 @@
 from utils.init_state import gen_nbrs, repair_sequence_logic
-from utils.topology import decode_and_synthesize
+from utils.topology import decode_and_synthesize, verify_circuit_logic
 
 import random
 import copy
@@ -53,7 +53,12 @@ def GA_run_single_experiment(
             nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, pc, pm,
             encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory
         )
-
+        #Integrity Verification
+        # Check if the synthesized circuits fulfill the logic requirements for the target output
+        # valid_count = sum(verify_circuit_logic(sol, num_bits, target_output) for sol in local_circuit)
+        
+        # if valid_count != num_neighbors:
+        #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
         # --- Step 4: 更新全域最佳解 ---
         # 直接拿當前這一代最強者的「索引」
         current_local_best_idx = np.argmin(local_fitness)

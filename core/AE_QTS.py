@@ -16,7 +16,8 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  qindividuals3, 
                                  qindividuals4, 
                                  fitness_history_matrix, 
-                                 target_output):
+                                 target_output,
+                                 delta_theta):
     """
     Executes a single trial of the AE-QTS algorithm.
     Iteratively updates quantum individuals (qindividuals1-4) to minimize circuit gate count.
@@ -57,7 +58,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         updateQ(
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
             num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-            [m[1] for m in sorted_metrics], num_cycles
+            [m[1] for m in sorted_metrics], num_cycles, delta_theta
         )
 
         # Step 5: Global Best Tracking
@@ -81,7 +82,7 @@ def AE_QTS_run_single_experiment(max_iterations,
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
                                num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-                               sorted_indices, num_cycles):
+                               sorted_indices, num_cycles, delta_theta):
     """
     Updates the probability distributions of quantum populations (q1-q4) based on 
     the relative fitness of their neighbors. 
@@ -99,9 +100,6 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
         best_idx = sorted_indices[t]
         worst_idx = sorted_indices[num_neighbors - 1 - t]
 
-        # Calculate rotation step (theta) - decreases as t increases to fine-tune search
-        rotation_step = 0.01 / (t + 1)
-
         # --- Update qindividuals1 (Strategy/Trajectory level) ---
         # best_sol1 and worst_sol1 represent the discrete decisions made by the neighbors
         best_sol1 = [list(map(int, row)) for row in nbr1[best_idx].tolist()]
@@ -113,8 +111,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                 w_val = worst_sol1[i][j]
                 if b_val != w_val:
                     # Increment probability of the 'best' decision, decrement the 'worst'
-                    qindividuals1[i][j][b_val] += rotation_step
-                    qindividuals1[i][j][w_val] -= rotation_step
+                    qindividuals1[i][j][b_val] += delta_theta
+                    qindividuals1[i][j][w_val] -= delta_theta
                     
                     # Boundary Correction: Ensure probabilities stay within [0, 1]
                     if qindividuals1[i][j][w_val] <= 0:
@@ -128,8 +126,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
         for i in range(len(qindividuals2)):
             for j in range(len(qindividuals2[i])):
                 if best_sol2[i][j] != worst_sol2[i][j]:
-                    qindividuals2[i][j][best_sol2[i][j]] += rotation_step
-                    qindividuals2[i][j][worst_sol2[i][j]] -= rotation_step
+                    qindividuals2[i][j][best_sol2[i][j]] += delta_theta
+                    qindividuals2[i][j][worst_sol2[i][j]] -= delta_theta
                     if qindividuals2[i][j][worst_sol2[i][j]] <= 0:
                         qindividuals2[i][j][best_sol2[i][j]] = 1.0
                         qindividuals2[i][j][worst_sol2[i][j]] = 0.0
@@ -147,8 +145,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                             b_bit = best_sol3[i][j][k][l]
                             w_bit = worst_sol3[i][j][k][l]
                             if b_bit != w_bit:
-                                qindividuals3[i][j][k][l][b_bit] += rotation_step
-                                qindividuals3[i][j][k][l][w_bit] -= rotation_step
+                                qindividuals3[i][j][k][l][b_bit] += delta_theta
+                                qindividuals3[i][j][k][l][w_bit] -= delta_theta
                                 if qindividuals3[i][j][k][l][w_bit] <= 0:
                                     qindividuals3[i][j][k][l][b_bit] = 1.0
                                     qindividuals3[i][j][k][l][w_bit] = 0.0
@@ -165,8 +163,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                         b_gate = best_sol4[i][j][k]
                         w_gate = worst_sol4[i][j][k]
                         if b_gate != w_gate:
-                            qindividuals4[i][j][k][b_gate] += rotation_step
-                            qindividuals4[i][j][k][w_gate] -= rotation_step
+                            qindividuals4[i][j][k][b_gate] += delta_theta
+                            qindividuals4[i][j][k][w_gate] -= delta_theta
                             if qindividuals4[i][j][k][w_gate] <= 0:
                                 qindividuals4[i][j][k][b_gate] = 1.0
                                 qindividuals4[i][j][k][w_gate] = 0.0

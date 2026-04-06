@@ -122,7 +122,13 @@ def TS_run_single_experiment(
         circuit_solutions, candidates = generate_ts_neighbors(
             curr_c1, curr_c2, curr_c3, curr_c4, encoding_table, num_bits, num_neighbors, base_trajectory
         )
+        #Integrity Verification
+        # Check if the synthesized circuits fulfill the logic requirements for the target output
+        # valid_count = sum(verify_circuit_logic(sol, num_bits, target_output) for sol in circuit_solutions)
         
+        # if valid_count != num_neighbors:
+        #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
+
         # --- Step 3: Candidate Evaluation ---
         scored_candidates = []
         # Pair each candidate state with its move_id, fitness score, and synthesized circuit

@@ -88,6 +88,14 @@ def PSO_run_single_experiment(
             discrete_nbr1, discrete_nbr2, discrete_nbr3, discrete_nbr4, 
             encoding_table, num_bits, num_neighbors, base_trajectory
         )
+        
+        # # Integrity Verification
+        # # Check if the synthesized circuits fulfill the logic requirements for the target output
+        # valid_count = sum(verify_circuit_logic(sol, num_bits, target_output) for sol in circuit_solutions)
+        
+        # if valid_count != num_neighbors:
+        #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
+
         # Identify local best of the current iteration (Iteration Best)
         lbest_fitness = [len(sol) for sol in circuit_solutions]
 

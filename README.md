@@ -101,12 +101,21 @@ python main.py 3 1 1
 ```
 
 ## 📂 Experimental Results
-Upon execution, the system automatically creates a directory structure under ```exp/``` and saves ```.txt``` files containing convergence data, means, standard deviations, and optimal circuits.
+Upon execution, the system automatically creates a structured directory under exp/ to store comprehensive trial data. Each experiment generates two types of files: a Summary Report (.txt) for quick review and a Convergence Matrix (.xlsx) for deep statistical analysis.
 
 Path Format:
 ```Bash
-exp/[n]_bit/[Algorithm]_Results/[Algorithm]_[n]_[idx].txt
+exp/
+└── [n]_bit/                         # Target qubit count (e.g., 13_bit)
+    └── [Algorithm]_Results/         # Specific algorithm folder
+        ├── [Algorithm]_[n]_[idx].txt    # Summary, Best Circuit, & Statistics
+        └── [Algorithm]_[n]_[idx].xlsx   # Full Generation-by-Generation Data
 ```
+
+| File Type | Content Description | Purpose |
+| :--- | :--- | :--- | 
+| **.txt** | Global best gate count, optimal circuit structure, average execution time, and final μ±σ results. | Quick Verification: Rapidly check if the algorithm found the target gate count.|
+| **.xlsx** | A complete Trial×Generation fitness matrix, including row-wise averages and standard deviations for every step.  | **10-bit** | Data Analysis: Used for plotting convergence curves and performing T-tests. |
 
 
 ## 📊 Data Analysis

@@ -38,7 +38,6 @@ def DE_run_single_experiment(
     local_best_gate_count = sorted_metrics[0][0]
     local_best_idx = sorted_metrics[0][1]
     local_best_circuit = circuit_solutions[local_best_idx]
-    num_cycles = len(rotation_cycles)
     # Initialize global optimization variables
     current_iter = 0
     global_best_gate_count = float('inf')

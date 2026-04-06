@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import os
 from utils.data_loader import DataLoader
-from utils.init_state import find_cycles, build_encode, gen_nbrs
+from utils.init_state import find_cycles, build_encode
 from core.AE_QTS import AE_QTS_run_single_experiment
 from core.DE import DE_run_single_experiment
 from core.PSO import PSO_run_single_experiment
@@ -233,7 +233,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                b = 1.0  # 螺旋常數
+                b = 1.0  # Spiral Constant
             )
 
         elif algo_choice == 9: # QEA (Quantum Evolutionary Algorithm - Global Best Guided)

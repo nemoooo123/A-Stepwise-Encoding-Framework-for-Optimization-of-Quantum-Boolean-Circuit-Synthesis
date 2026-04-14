@@ -129,7 +129,7 @@ def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, limit,
             for layer in [nbr1[i], nbr2[i]]:
                 for r in range(len(layer)):
                     for c in range(len(layer[r])):
-                        if random.random() < 0.3: # 大機率突變
+                        if random.random() < 0.3: # High probability mutation
                             layer[r][c] = 1 - layer[r][c]
 
             # 2. Handle Layer 3 (4D structure: [j][k][l][m])

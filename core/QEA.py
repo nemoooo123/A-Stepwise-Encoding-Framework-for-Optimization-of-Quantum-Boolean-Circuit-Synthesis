@@ -22,9 +22,9 @@ def QEA_run_single_experiment(max_iterations,
                                  target_output,
                                  delta_theta):
     """
-    Executes a single trial of the QTS algorithm for quantum circuit synthesis.
+    Executes a single trial of the QEA algorithm for quantum circuit synthesis.
     Iteratively evolves the quantum probability distributions (qindividuals1-4) 
-    to converge toward the minimum gate count solution.
+    to converge toward the minimum gate count solution using global best reinforcement.
     """
     
     num_cycles = len(rotation_cycles)
@@ -32,7 +32,7 @@ def QEA_run_single_experiment(max_iterations,
     global_best_gate_count = float('inf')
     global_best_circuit = []
 
-    # --- 關鍵：紀錄歷史最佳解的位置 (Global Best Position) ---
+    # Track the Global Best Position (gb_pos) across layers ---
     gb_pos1, gb_pos2, gb_pos3, gb_pos4 = None, None, None, None
     
     # --- QTS Main Evolution Loop ---
@@ -58,24 +58,26 @@ def QEA_run_single_experiment(max_iterations,
         # if valid_count != num_neighbors:
         #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
 
-        # Step 3: 適應度評估
+        # Step 3: Fitness Evaluation
+        # Calculate the gate count for each synthesized circuit solution.
         fitness = [len(sol) for sol in circuit_solutions]
         local_best_idx = np.argmin(fitness)
         local_best_gate = fitness[local_best_idx]
 
-        # Step 4: 更新全域最佳解與其位置
+        # Step 4: Update Global Best Solution and Global Best Position
+        # If the current local best is superior to the historical global best, update records.
         if local_best_gate < global_best_gate_count:
             global_best_gate_count = local_best_gate
             global_best_circuit = circuit_solutions[local_best_idx]
-            # 儲存歷史最強的「位置基因」
+            # Store the elite "Position Genes" for quantum rotation reinforcement
             gb_pos1 = copy.deepcopy(nbr1[local_best_idx])
             gb_pos2 = copy.deepcopy(nbr2[local_best_idx])
             gb_pos3 = copy.deepcopy(nbr3[local_best_idx])
             gb_pos4 = copy.deepcopy(nbr4[local_best_idx])
 
-        # Step 5: QTS Quantum State Update
-        # Apply the 'best-vs-worst' strategy to rotate the quantum states.
-        # This shifts the probability toward the elite neighbor and away from the poor one.
+        # Step 5: QEA Quantum State Update
+        # Rotate quantum states towards the Global Best Position (gb_pos) 
+        # to intensify search around the most promising regions of the solution space.
         updateQ(
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
             gb_pos1, gb_pos2, gb_pos3, gb_pos4, 
@@ -86,33 +88,33 @@ def QEA_run_single_experiment(max_iterations,
         # Store the current global minimum gate count into the fitness history matrix.
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
 
-    # Returns the convergence history and the optimal circuit found via QTS optimization.
+    # Returns the convergence history and the optimal circuit found via QEA optimization.
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
                             gb_pos1, gb_pos2, gb_pos3, gb_pos4, 
                               num_cycles, delta_theta):
     """
-    Updates the probability distributions of quantum populations (q1-q4) based on 
-    the competitive 'best-vs-worst' interaction in QTS. 
-    Shifts probability amplitudes to favor high-fitness discrete decisions.
+    Updates the probability distributions of quantum populations (q1-q4).
+    Shifts quantum amplitudes toward the discrete decisions made in the 
+    Global Best Position (gb_pos) to guide future sampling.
     """
 
     # --- Update qindividuals1 (Strategy/Trajectory level) ---
-    # Shift probabilities based on the global trajectory decisions in QTS
     best_sol1 = [list(map(int, row)) for row in gb_pos1.tolist()]
 
     for i in range(len(qindividuals1)):
         for j in range(len(qindividuals1[i])):
             b_val = best_sol1[i][j]
+            # Identify the alternative (worst) choice for rotation
             if b_val == 0:
                 w_val = 1
             else: w_val = 0
-
+            # Rotate toward the global best bit
             qindividuals1[i][j][b_val] += delta_theta
             qindividuals1[i][j][w_val] -= delta_theta
             
-            # QTS Boundary Correction
+            # Boundary Correction for Quantum Probability [0, 1]
             if qindividuals1[i][j][w_val] <= 0:
                 qindividuals1[i][j][b_val] = 1.0
                 qindividuals1[i][j][w_val] = 0.0
@@ -134,13 +136,12 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                 qindividuals2[i][j][w_val] = 0.0
 
     # --- Update qindividuals3 (Route/Path level) ---
-    # Update QTS path node probabilities while respecting 999 fixed topology
     best_sol3 = gb_pos3
 
     for i in range(len(qindividuals3)):
         for j in range(len(best_sol3[i])):
             for k in range(len(best_sol3[i][j])):
-
+                # Respect structural constraints (999 markers indicate fixed topology)
                 if best_sol3[i][j][k] != 999 :
                     num_choices = len(qindividuals3[i][j][k])
                     for l in range(num_choices):
@@ -155,11 +156,11 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                             qindividuals3[i][j][k][l][w_val] = 0.0
 
     # --- Update qindividuals4 (Gate Order level) ---
-    # Finalize QTS gate sequence distribution based on elite performance
     best_sol4 = gb_pos4
 
     for i in range(num_cycles):
         for j in range(len(best_sol4[i])):
+            # Skip trivial single-gate sequences
             if len(best_sol4[i][j]) > 1:
                 for k in range(len(best_sol4[i][j])):
                     

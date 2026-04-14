@@ -55,7 +55,7 @@ def PSO_run_single_experiment(
         current_iter += 1
 
         for i in range(num_neighbors):
-            # 生成隨機因子 r1, r2 增加搜尋隨機性
+            # Apply stochastic factors r1, r2 to increase search exploration
             
             # Update Layer 1 (Global Selection): Sync Pos, Vel, and Discrete bits
             vel1[i], curr_nbr1[i], discrete_nbr1[i] = pso_recursive_sync_update(
@@ -420,8 +420,9 @@ def pso_layer_L4(sequence_templates):
                 step_vel.append(stochastic_vel)
                 step_raw_disc.append(discrete_bit)
             
-            # --- 重要：執行序列修復邏輯 ---
-            # 確保初始化的二進位序列符合電路邏輯（例如閘的正反向平衡）
+            # --- IMPORTANT: Execute Sequence Repair Logic ---
+            # Ensure that the initialized binary sequences comply with circuit logic 
+            # (e.g., maintaining the forward/reverse balance of quantum gates).
             repaired_disc = repair_sequence_logic(step_raw_disc)
             
             cycle_pos.append(step_pos)

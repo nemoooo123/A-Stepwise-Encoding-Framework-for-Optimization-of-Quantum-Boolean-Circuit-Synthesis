@@ -176,7 +176,7 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
                         oor=parent1_n3[i][j][k][l]|aand
                         tmp_3.append(oor)
                     tmp_2.append(tmp_3)
-                else:tmp_2.append(999)#999的另外處理
+                else:tmp_2.append(999) #Maintain the placeholder value
             tmp_1.append(tmp_2)
         mutated_n3.append(tmp_1)
 
@@ -258,7 +258,7 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
             
         trial_n4.append(tmp_layer)
     
-     # --- Step 5: Decoding and Fitness Evaluation ---
+    # --- Step 5: Decoding and Fitness Evaluation ---
     # Decode binary strings to integers for Layer 1
     decoded_n1 = [int(''.join(map(str, row)), 2) for row in trial_n1]
         

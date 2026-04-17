@@ -288,8 +288,8 @@ def main():
 # --- Automatic Directory and Filename Creation ---
     # Algorithm mapping: mapping choice ID to descriptive names
     algo_names = {
-        1: "AE-QTS", 2: "DE", 3: "PSO", 4: "TS", 5: "QTS", 
-        6: "GA", 7: "ABC", 8: "WOA", 9: "QEA"
+        1: "AE-QTS", 2: "QTS", 3: "QEA", 4: "GA", 5: "DE", 
+        6: "TS", 7: "PSO", 8: "WOA", 9: "ABC"
     }
     algo_name = algo_names.get(algo_choice, "Other")
     

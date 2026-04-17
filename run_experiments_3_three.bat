@@ -6,7 +6,7 @@ cd /d "%~dp0"
 :: 1. 實驗參數設定
 :: ==========================================
 set PYTHON_FILE=main_three.py
-set QUESTION_ID=3
+set QUESTION_ID=8
 set FOLDER=exp
 set QUESTION_FOLDER=%~dp0question
 

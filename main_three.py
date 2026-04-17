@@ -15,11 +15,6 @@ from core.ABC import ABC_run_single_experiment
 from core.WOA import WOA_run_single_experiment
 from core.QEA import QEA_run_single_experiment
 def main():
-    import psutil
-
-    # 將目前的 Python 進程設定為「高優先度」
-    p = psutil.Process(os.getpid())
-    p.nice(psutil.HIGH_PRIORITY_CLASS)
 
     # 如果想限制只跑在 P-core (假設 P-core 是前 16 個邏輯處理器)
     # p.cpu_affinity(list(range(16)))
@@ -58,7 +53,7 @@ def main():
         line_count = sum(1 for line in file)
         file.seek(0)
         ttttt=1
-        numbers=1+2016+2016
+        numbers=1+2016+2016+2016+2016+2016+2016+2016
         for line in file:
             line = line.strip() # 去掉換行符號 \n
             if not line:        # 略過空行

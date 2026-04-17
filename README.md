@@ -123,7 +123,7 @@ exp/
 | File Type | Content Description | Purpose |
 | :--- | :--- | :--- | 
 | **.txt** | Global best gate count, optimal circuit structure, average execution time, and final μ±σ results. | Quick Verification: Rapidly check if the algorithm found the target gate count.|
-| **.xlsx** | A complete Trial×Generation fitness matrix, including row-wise averages and standard deviations for every step.  | **10-bit** | Data Analysis: Used for plotting convergence curves and performing T-tests. |
+| **.xlsx** | A complete Trial×Generation fitness matrix, including row-wise averages and standard deviations for every step.  | Data Analysis: Used for plotting convergence curves and performing T-tests. |
 
 
 ## 📊 Data Analysis

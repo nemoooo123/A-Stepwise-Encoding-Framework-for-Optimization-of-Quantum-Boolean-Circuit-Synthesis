@@ -25,7 +25,7 @@ def main():
     try:
         num_bits = int(input("Enter number of bits (n): "))
         problem_idx = int(input("Enter problem index: "))
-        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: DE, 3: PSO, 4: TS, 5: QTS, 6: GA, 7: ABC, 8: WOA, 9: QEA): "))
+        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: QTS, 3: QEA, 4: GA, 5: DE, 6: TS, 7: PSO, 8: WOA, 9: ABC): "))
     except ValueError:
         print("Invalid input. Please enter numeric values.")
         return
@@ -88,69 +88,7 @@ def main():
                 delta_theta = 0.01
             )
             
-
-        elif algo_choice == 2: # DE (Differential Evolution - A population-based stochastic global optimizer)
-            # Step 1: Initialize Encoding Fram
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
-            fitness_history_matrix, final_best_gate , best_circuit_this_run = DE_run_single_experiment(
-                max_iterations = max_iterations,
-                rotation_cycles = cycles,
-                num_neighbors = num_neighbors,
-                num_bits = num_bits,
-                base_trajectory = trajectory_base,
-                experiment_id = r,
-                encoding_table = encoding_table,
-                pop_matrix1 = pop_matrix1,
-                pop_matrix2 = pop_matrix2,
-                pop_matrix3 = pop_matrix3,
-                pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output,
-                CR = 0.05,
-            )
-
-        elif algo_choice == 3: # PSO (Particle Swarm Optimization)
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
-            fitness_history_matrix, final_best_gate, best_circuit_this_run = PSO_run_single_experiment(
-                max_iterations = max_iterations,
-                rotation_cycles = cycles,
-                num_neighbors = num_neighbors,
-                num_bits = num_bits,
-                base_trajectory = trajectory_base,
-                experiment_id = r,
-                encoding_table = encoding_table,
-                pop_matrix1 = pop_matrix1,
-                pop_matrix2 = pop_matrix2,
-                pop_matrix3 = pop_matrix3,
-                pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output,
-                w=0.6,c1=3.0,c2=1.0
-            )
-        
-        elif algo_choice == 4: # TS (Tubu Search) 
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
-            fitness_history_matrix, final_best_gate, best_circuit_this_run = TS_run_single_experiment(
-                max_iterations = max_iterations,
-                rotation_cycles = cycles,
-                num_neighbors = num_neighbors,
-                num_bits = num_bits,
-                base_trajectory = trajectory_base,
-                experiment_id = r,
-                encoding_table = encoding_table,
-                pop_matrix1 = pop_matrix1,
-                pop_matrix2 = pop_matrix2,
-                pop_matrix3 = pop_matrix3,
-                pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output,
-                tabu_size = 55
-            )
-        
-        elif algo_choice == 5: # QTS (Quantum-Inspired Tabu Search)
+        elif algo_choice == 2: # QTS (Quantum-Inspired Tabu Search)
             # Step 2: Initialize Quantum Individuals and Encoding Tables
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
             
@@ -172,73 +110,7 @@ def main():
                 delta_theta = 0.01
             )
 
-        elif algo_choice == 6: # GA (Genetic Algorithm)
-
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
-            fitness_history_matrix, final_best_gate, best_circuit_this_run = GA_run_single_experiment(
-                max_iterations = max_iterations,
-                rotation_cycles = cycles,
-                num_neighbors = num_neighbors,
-                num_bits = num_bits,
-                base_trajectory = trajectory_base,
-                experiment_id = r,
-                encoding_table = encoding_table,
-                pop_matrix1 = pop_matrix1,
-                pop_matrix2 = pop_matrix2,
-                pop_matrix3 = pop_matrix3,
-                pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output,
-                k=3, 
-                pc=0.82, # crossover
-                pm=0.025 # mutation
-
-            )
-
-        elif algo_choice == 7: # ABC(Artificial Bee Colony Algorithm)
-
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
-            fitness_history_matrix, final_best_gate, best_circuit_this_run = ABC_run_single_experiment(
-                max_iterations = max_iterations,
-                rotation_cycles = cycles,
-                num_neighbors = num_neighbors,
-                num_bits = num_bits,
-                base_trajectory = trajectory_base,
-                experiment_id = r,
-                encoding_table = encoding_table,
-                pop_matrix1 = pop_matrix1,
-                pop_matrix2 = pop_matrix2,
-                pop_matrix3 = pop_matrix3,
-                pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output,
-                limit = 25
-            )
-        
-        elif algo_choice == 8: # WOA (Whale Optimization Algorithm)
-            # Step 1: Initialize Encoding Framework
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
-            fitness_history_matrix, final_best_gate, best_circuit_this_run = WOA_run_single_experiment(
-                max_iterations = max_iterations,
-                rotation_cycles = cycles,
-                num_neighbors = num_neighbors,
-                num_bits = num_bits,
-                base_trajectory = trajectory_base,
-                experiment_id = r,
-                encoding_table = encoding_table,
-                pop_matrix1 = pop_matrix1,
-                pop_matrix2 = pop_matrix2,
-                pop_matrix3 = pop_matrix3,
-                pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
-                target_output = target_output,
-                b = 1.2  # Spiral Constant
-            )
-
-        elif algo_choice == 9: # QEA (Quantum Evolutionary Algorithm - Global Best Guided)
+        elif algo_choice == 3: # QEA (Quantum Evolutionary Algorithm - Global Best Guided)
             # Step 1: Initialize Quantum-Inspired Encoding Framework
             # Generates probability-based individuals (qindividuals) and discrete encoding tables.
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
@@ -262,6 +134,134 @@ def main():
                 target_output = target_output,
                 delta_theta = 0.002  # Rotation step size for QEA state updates
             )
+
+        elif algo_choice == 4: # GA (Genetic Algorithm)
+
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate, best_circuit_this_run = GA_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                k=3, 
+                pc=0.82, # crossover
+                pm=0.025 # mutation
+
+            )
+        elif algo_choice == 5: # DE (Differential Evolution - A population-based stochastic global optimizer)
+            # Step 1: Initialize Encoding Fram
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate , best_circuit_this_run = DE_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                CR = 0.05,
+            )
+        
+        elif algo_choice == 6: # TS (Tubu Search) 
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate, best_circuit_this_run = TS_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                tabu_size = 55
+            )
+
+        elif algo_choice == 7: # PSO (Particle Swarm Optimization)
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate, best_circuit_this_run = PSO_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                w=0.6,c1=3.0,c2=1.0
+            )
+
+        elif algo_choice == 8: # WOA (Whale Optimization Algorithm)
+            # Step 1: Initialize Encoding Framework
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate, best_circuit_this_run = WOA_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                b = 1.2  # Spiral Constant
+            )
+
+        elif algo_choice == 9: # ABC(Artificial Bee Colony Algorithm)
+
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            
+            fitness_history_matrix, final_best_gate, best_circuit_this_run = ABC_run_single_experiment(
+                max_iterations = max_iterations,
+                rotation_cycles = cycles,
+                num_neighbors = num_neighbors,
+                num_bits = num_bits,
+                base_trajectory = trajectory_base,
+                experiment_id = r,
+                encoding_table = encoding_table,
+                pop_matrix1 = pop_matrix1,
+                pop_matrix2 = pop_matrix2,
+                pop_matrix3 = pop_matrix3,
+                pop_matrix4 = pop_matrix4,
+                fitness_history_matrix = fitness_history_matrix,
+                target_output = target_output,
+                limit = 25
+            )
+
+        
 
         experiment_end_time = time.time()
         elapsed_time = experiment_end_time - experiment_start_time

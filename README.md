@@ -85,21 +85,21 @@ Algorithm ID Mapping:
 
 1: Amplitude-Ensemble Quantum-Inspired Tabu Search Algorithm (AE-QTS)
 
-2: Differential Evolution (DE)
+2: Quantum-Inspired Tabu Search (QTS)
 
-3: Particle Swarm Optimization (PSO)
+3: Quantum Evolutionary Algorithm (QEA)
 
-4: Tubu Search (TS)
+4: Genetic Algorithm (GA)
 
-5: Quantum-Inspired Tabu Search (QTS)
+5: Differential Evolution (DE)
 
-6: Genetic Algorithm (GA)
+6: Tubu Search (TS)
 
-7: Artificial Bee Colony Algorithm (ABC)
+7: Particle Swarm Optimization (PSO)
 
 8: Whale Optimization Algorithm (WOA)
 
-9: Quantum Evolutionary Algorithm (QEA)
+9: Artificial Bee Colony Algorithm (ABC)
 
 Example Command:
 

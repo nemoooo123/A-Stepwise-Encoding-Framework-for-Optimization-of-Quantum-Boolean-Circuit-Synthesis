@@ -31,12 +31,12 @@ The project includes several built-in benchmarks for quantum Boolean circuit syn
 
 | Qubits (Bits) | Problems | Qubits (Bits) | Problems |
 | :--- | :--- | :--- | :--- |
-| **3-bit** | 13 | **9-bit**  | 5 |
-| **4-bit** | 9  | **10-bit** | 5 |
-| **5-bit** | 5  | **11-bit** | 5 |
-| **6-bit** | 5  | **12-bit** | 5 |
-| **7-bit** | 5  | **13-bit** | 5 |
-| **8-bit** | 5  |
+| **5-bit** | 5  | **10-bit** | 5 |
+| **6-bit** | 5  | **11-bit** | 5 |
+| **7-bit** | 5  | **12-bit** | 5 |
+| **8-bit** | 5  | **13-bit** | 5 |
+| **9-bit** | 5  |
+
 
 ---
 

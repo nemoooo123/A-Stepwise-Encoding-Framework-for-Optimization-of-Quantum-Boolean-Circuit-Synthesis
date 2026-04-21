@@ -38,7 +38,7 @@ The project includes several built-in benchmarks for quantum Boolean circuit syn
 | **9-bit** | 5  |
 
 
-## Detailed Benchmark Data (Truth Tables)
+### Detailed Benchmark Data (Truth Tables)
 
 <details>
 <summary>▶ 5-Bit Benchmark Functions (f1 - f5)</summary>

@@ -55,362 +55,57 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
 
 def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories): 
     """
-    Synthesizes the final execution route by analyzing cycle sequences and inter-cycle dependencies.
-    General-purpose implementation for path optimization algorithms.
+    Synthesizes the final execution route by resolving cycle sequences and inter-cycle dependencies.
+    
+    This function implements the physical instantiation phase of the synthesis framework, 
+    mapping optimized logical topologies into a sequence of executable state transitions.
     
     Args:
-        priority_weights (list): Layer 1 - Processing priority for each cycle.
-        entry_points (list): Layer 2 - Starting index for each cycle sequence.
-        mid_node_matrix (list): Layer 3 - Matrix of intermediate node indices.
-        operation_sequences (list): Layer 4 - Sequence of logic operations/actions.
-        num_units (int): Total number of processing units/elements (n).
-        trajectories (list): Database of pre-calculated state transitions.
+        priority_weights (list): Layer 1 - Heuristic processing priorities for cycle scheduling.
+        entry_points (list): Layer 2 - Starting state indices for each cycle sequence.
+        mid_node_matrix (list): Layer 3 - Weight matrix of candidate intermediate nodes for each transition.
+        operation_sequences (list): Layer 4 - Sequence of logical operators (gates) associated with each step.
+        num_units (int): System radix, representing the total number of processing elements (n-bits/qubits).
+        trajectories (list): Pre-calculated database of valid state transition trajectories.
+        
+    Returns:
+        circuit: The fully assembled reversible circuit description.
     """
-    # Initialize Layer 3 nodes to base state
-    initialize_solution_layer(mid_node_matrix)
-    
-    
-    # Sort cycles based on Layer 1 priority (Descending)
+
+    # Perform temporal scheduling by sorting cycles in descending order based on Layer 1 priority weights.
+    # Higher priority cycles are processed first to ensure optimal path selection.
     sorted_order = [idx for idx, _ in sorted(enumerate(priority_weights), key=lambda x: x[1], reverse=True)]
-
-    # Initialize state positions for each solution using entry points and cycle sequences
-    final_ops=[]
-    final_paths=[] # Buffer to store the refreshed path trajectories
-     
-    # Core Data Structures for Path Analysis
-    path_indices = []       # Trajectory index mapping
-    path_weights = []        # Distance/Hamming metrics
     
-    # Inter-cycle connectivity buffers
-    head_states = []         # Initial state of the segment
-    tail_states = []         # Final state of the segment
+    final_paths = []
+    final_ops = []
 
-    # --- Phase 1: Segment Scanning & Path Construction ---
+    # Convert optimized node priorities into concrete state-space trajectories and operation sequences.
     for ind, cycle_idx in enumerate(sorted_order):
-        step_indices = []
-        step_weights = []
-        
-        start_pos = entry_points[cycle_idx]
-        num_steps = len(mid_node_matrix[cycle_idx])
-        if num_steps == 1: num_steps = 2 # Edge case for minimal transitions
-        
-        for step in range(num_steps - 1):
-            curr_pos = (start_pos + step) % num_steps
-            is_final = (step == num_steps - 2)
-            
-            # Construct atomic transition segments
-            path, weight, h_node, t_node = analyze_bit_differences(curr_pos, mid_node_matrix[cycle_idx][curr_pos], 
-                                                    trajectories[cycle_idx], is_final, num_units)
-            
-            if is_final:
-                head_states.append(h_node)
-                tail_states.append(t_node)
-                
-            step_indices.append(path)
-            step_weights.append(weight)
-            
-        path_indices.append(step_indices)
-        path_weights.append(step_weights)
-
-    # --- Phase 2: Sequence Optimization & Index Adjustment ---      
-    optimization_flags=[]
-    reduction_indices=[]
-    lookahead_indices=[]
-    is_standard_flow=True
-
-    for ind,cycle_idx in enumerate(sorted_order):
-
-        # Use deepcopy to ensure data integrity and prevent unintended side effects on the original path_indices
-        curr_indices = copy.deepcopy(path_indices[ind])
-        curr_weights = copy.deepcopy(path_weights[ind])
-
-        if is_standard_flow: 
-            # Analyze sequences for potential redundancy reduction
-            counts_tmp,elements_tmp,get_fi,he_fi=reduce_sequences_standard(curr_indices,curr_weights)
-            optimization_flags.append(0)
-            reduction_indices.append(-1) 
-
-        else:
-            # --- Strategy-Based Inter-Cycle Optimization ---
-            # If standard flow is False, analyze specific reduction strategies (1-4)
-            if strategy_type==3: 
-                # STRATEGY 3: Independent cycle processing with node alignment
-                curr_indices = copy.deepcopy(path_indices[ind])
-                curr_weights = copy.deepcopy(path_weights[ind])
-                # Baseline analysis without modifications
-                counts_tmp,elements_tmp,get_fi,he_fi=reduce_sequences_standard(curr_indices,curr_weights)
-                best_reduction_count=sum(counts_tmp)
-                optimal_node=-1
-                # Verify if the existing sequence already aligns with common transition nodes
-                if len(elements_tmp[0])!=0 and elements_tmp[0][-1] in candidate_nodes :
-                    pass
-                else:
-                    # Attempt manual alignment by iterating through candidate overlapping nodes
-                    for val in candidate_nodes:
-                        curr_indices = copy.deepcopy(path_indices[ind])
-                        curr_weights = copy.deepcopy(path_weights[ind])
-                        
-                        # Perform targeted sequence analysis using the candidate node
-                        kb_counts, kb_elements, kb_get_fi, kb_he_fi = reduce_sequences_targeted(curr_indices, curr_weights, val)
-                        
-                        # Update if the specific node alignment yields equal or better reduction
-                        if sum(kb_counts) >= best_reduction_count:
-                            counts_tmp, elements_tmp = kb_counts, kb_elements
-                            get_fi, he_fi = kb_get_fi, kb_he_fi
-                            best_reduction_count = sum(kb_counts)
-                            optimal_node = val
-
-                # Store the results of Strategy 3 search
-                if optimal_node!=-1: # Valid alignment node detected
-                    optimization_flags.append(strategy_type) # Apply strategy-specific optimization flag
-                    reduction_indices.append(optimal_node)
-                else:
-                    optimization_flags.append(0)
-                    reduction_indices.append(-1)
-                
-            
-            elif strategy_type in [1, 2]:
-                # STRATEGY 1 & 2: Prefix-based cycle merging
-                # Attempt to insert candidate nodes at the start of the sequence to trigger reductions
-
-                best_reduction_count = 0
-                optimal_node = -1
-
-                for idx,val in enumerate(candidate_nodes):
-                    
-                    curr_indices = copy.deepcopy(path_indices[ind])
-                    curr_weights = copy.deepcopy(path_weights[ind])
-
-                    # Temporarily inject candidate node at the sequence header (index 0)
-                    curr_weights.insert(0, 1)
-                    curr_indices.insert(0,[val])
-
-                    kb_counts, kb_elements, kb_get_fi, kb_he_fi = reduce_sequences_ordered(curr_indices, curr_weights)
-                    
-                    # Remove the temporary injected markers after analysis
-                    kb_counts.pop(0)
-                    kb_elements.pop(0)
-                    curr_weights.pop(0)
-                    curr_indices.pop(0)
-
-                    # Selection logic: Store the first candidate or any candidate that improves the reduction count
-                    if idx == 0 or sum(kb_counts) > best_reduction_count:
-                        counts_tmp, elements_tmp = kb_counts, kb_elements
-                        get_fi, he_fi = kb_get_fi, kb_he_fi
-                        best_reduction_count = sum(kb_counts)
-                        optimal_node = val
-
-                # Validate if Strategy 1/2 successfully reduced the first step
-                if counts_tmp[0] != 0: 
-                    optimization_flags.append(strategy_type) 
-                    reduction_indices.append(optimal_node)
-                else:
-                    optimization_flags.append(0)
-                    reduction_indices.append(-1)
-
-            elif is_leap_strategy==1:
-                # STRATEGY 4: Leap-ahead head node verification
-                curr_indices = copy.deepcopy(path_indices[ind])
-                curr_weights = copy.deepcopy(path_weights[ind])
-                
-                counts_tmp,elements_tmp,get_fi,he_fi=reduce_sequences_standard(curr_indices,curr_weights)
-                best_reduction_count=sum(counts_tmp)
-
-                # Check if the sequence's entry node matches the leap target
-                is_node_matched = (leap_target_node in curr_indices[0])
-                
-                # If no natural reduction exists but the node matches, force KB-style analysis
-
-                if len(elements_tmp[0])==0 and is_node_matched:
-                    curr_indices_2 = copy.deepcopy(path_indices[ind])
-                    curr_weights_2 = copy.deepcopy(path_weights[ind])
-                    
-                    kb_counts,kb_elements_tmp,kb_get_fi,kb_he_fi=reduce_sequences_targeted(curr_indices_2,curr_weights_2,leap_target_node) #丟對了
-                    
-                    # Sub-case: No reduction found, or specific node mismatch
-                    if sum(kb_counts)>=best_reduction_count: 
-                        counts_tmp=kb_counts
-                        best_reduction_count=sum(counts_tmp) 
-                        elements_tmp=kb_elements_tmp
-                        get_fi=kb_get_fi
-                        he_fi=kb_he_fi
-                elif len(elements_tmp[0])!=0 and is_node_matched:
-                    if elements_tmp[0][-1]!=leap_target_node:
-                        curr_indices_2 = copy.deepcopy(path_indices[ind])
-                        curr_weights_2 = copy.deepcopy(path_weights[ind])
-                        kb_counts,kb_elements_tmp,kb_get_fi,kb_he_fi=reduce_sequences_targeted(curr_indices_2,curr_weights_2,leap_target_node) 
-                        
-                        if sum(kb_counts)>=best_reduction_count: 
-                            counts_tmp=kb_counts
-                            best_reduction_count=sum(counts_tmp) 
-                            elements_tmp=kb_elements_tmp
-                            get_fi=kb_get_fi
-                            he_fi=kb_he_fi
-                
-                optimization_flags.append(0)
-                reduction_indices.append(-1)
-        
-        if ind<len(sorted_order)-1:  
-            # Fetch the start nodes of the next cycle to predict overlap
-            next_cycle_idx = sorted_order[ind+1]
-            next_start_node = trajectories[next_cycle_idx][entry_points[next_cycle_idx]]
-            next_second_node = trajectories[next_cycle_idx][entry_points[next_cycle_idx] + 1]
-            
-            # Map future trajectory indices and establish potential reduction strategies
-            current_lookahead_map = map_next_transition_bits(next_start_node, next_second_node, num_units)
-            lookahead_indices.append(current_lookahead_map)
-            
-            candidate_nodes,strategy_type,is_leap_strategy=determine_transition_strategy(
-                next_start_node,next_second_node,head_states[ind],tail_states[ind],
-                get_fi,he_fi,current_lookahead_map) 
-            # If an exit overlap exists, set it as the leap target for Strategy 4
-            if len(he_fi)!=0:
-                leap_target_node=he_fi[0]
-
-
-            # Toggle between standard processing and optimized strategy flow
-            is_standard_flow = not (strategy_type != 0 or is_leap_strategy == 1)
-
-        # --- Phase 3: Priority Fine-tuning for Mid-Node Matrix ---
-        # Adjusting weights to force specific path selections in the Layer 3 sorter
-        curr_step_idx=entry_points[cycle_idx]
-        
-        for j,reduction_val in enumerate(counts_tmp): 
-            if reduction_val !=0: 
-                # Scenario 3: Current step has unit weight; adjust preceding step's priority down
-                if path_weights[ind][j] == 1: 
-                    priority_dn=1-reduction_val 
-                    if path_weights[ind][j-1] != 1:
-                        for offset in range(reduction_val - 1):
-                            target_val=elements_tmp[j-1][-1 - offset] 
-                            
-                            # Locate the specific path index to adjust its priority
-                            sub_idx = 0
-                            for val in path_indices[ind][j-1]: 
-                                if val==target_val:break
-                                else:sub_idx+=1
-                            mid_node_matrix[cycle_idx][curr_step_idx - 1][sub_idx]+=priority_dn
-                            priority_dn+=1 
-
-                    curr_step_idx=(curr_step_idx + 1) % len(mid_node_matrix[cycle_idx])
-                    priority_up=reduction_val 
-
-                    # Adjust current step's priority up to favor the reduction path
-                    for offset in range(reduction_val):
-                        target_val=elements_tmp[j+1][offset] 
-                        sub_idx = 0
-                        for val in path_indices[ind][j+1]: 
-                            if val==target_val: break
-                            else: sub_idx += 1
-                        mid_node_matrix[cycle_idx][curr_step_idx][sub_idx]+=priority_up
-                        priority_up -= 1 
-
-                # Scenario 2: Subsequent step has unit weight
-                elif path_weights[ind][j+1]==1: 
-                    priority_dn= -reduction_val 
-                    for offset in range(reduction_val):
-                        target_val = elements_tmp[j][-1 - offset] 
-                        sub_idx = 0
-                        for val in path_indices[ind][j]: 
-                            if val==target_val:break
-                            else: sub_idx += 1
-                        mid_node_matrix[cycle_idx][curr_step_idx][sub_idx]+=priority_dn
-                        priority_dn += 1 
-
-                    curr_step_idx=(curr_step_idx + 1)%len(mid_node_matrix[cycle_idx])
-                    next_step_ptr=(curr_step_idx + 1)%len(mid_node_matrix[cycle_idx])
-                    priority_up = reduction_val - 1 
-
-                    if reduction_val != 1 and path_weights[ind][j+2] != 1:
-                        for offset in range(reduction_val - 1):
-                            target_val = elements_tmp[j+2][offset]
-                            sub_idx = 0
-                            for val in path_indices[ind][j+2]:
-                                if val == target_val: break
-                                else: sub_idx += 1
-                            mid_node_matrix[cycle_idx][next_step_ptr][sub_idx] += priority_up
-                            priority_up -= 1
-                # Scenario 1: Standard backward-looking alignment
-                else:
-                    priority_dn = -reduction_val
-                    for offset in range(reduction_val):
-                        target_val = elements_tmp[j][-1 - offset]
-                        sub_idx = 0
-                        for val in path_indices[ind][j]:
-                            if val == target_val: break
-                            else: sub_idx += 1
-                        mid_node_matrix[cycle_idx][curr_step_idx][sub_idx] += priority_dn
-                        priority_dn += 1
-
-                    curr_step_idx = (curr_step_idx + 1) % len(mid_node_matrix[cycle_idx])
-                    priority_up = reduction_val
-                    for offset in range(reduction_val):
-                        target_val = elements_tmp[j+1][offset]
-                        sub_idx = 0
-                        for val in path_indices[ind][j+1]:
-                            if val == target_val: break
-                            else: sub_idx += 1
-                        mid_node_matrix[cycle_idx][curr_step_idx][sub_idx] += priority_up
-                        priority_up -= 1
-            else:
-                curr_step_idx = (curr_step_idx + 1) % len(mid_node_matrix[cycle_idx])
-
-        # --- Phase 4: Inter-Cycle Strategy Compensation ---
-        if ind <= len(sorted_order)-1 and optimization_flags[ind] > 0 :
-            prev_cycle_idx=sorted_order[ind-1]
-            prev_step_tail = 0 if len(mid_node_matrix[prev_cycle_idx]) == 1 else entry_points[prev_cycle_idx] - 2
-
-            # Handling Strategy 1 & 3: Aligning the tail of the previous cycle
-            if optimization_flags[ind] in [1, 3]:
-                if len(mid_node_matrix[prev_cycle_idx][prev_step_tail]) != 1:
-                    sub_idx = 0
-                    for val in path_indices[ind-1][-1]:
-                        if val == reduction_indices[ind]: break
-                        else: sub_idx += 1
-                    mid_node_matrix[prev_cycle_idx][prev_step_tail][sub_idx] += min(mid_node_matrix[prev_cycle_idx][prev_step_tail]) - 1
-                
-                curr_target_step = entry_points[sorted_order[ind]]
-                if len(mid_node_matrix[sorted_order[ind]][curr_target_step]) != 1:
-                    sub_idx = 0
-                    for val in lookahead_indices[ind-1]:
-                        if val == reduction_indices[ind]: break
-                        else: sub_idx += 1
-                    if optimization_flags[ind] == 1:
-                        mid_node_matrix[sorted_order[ind]][curr_target_step][sub_idx] += (len(mid_node_matrix[sorted_order[ind]][curr_target_step]) + 1)
-            
-            # Handling Strategy 2 & 4: Direct header alignment
-            if optimization_flags[ind] in [2, 4]:
-                curr_target_step = entry_points[sorted_order[ind]]
-                if len(mid_node_matrix[sorted_order[ind]][curr_target_step]) != 1:
-                    sub_idx = 0
-                    for val in lookahead_indices[ind-1]:
-                        if val == reduction_indices[ind]: break
-                        else: sub_idx += 1
-                    if optimization_flags[ind] == 2:
-                        mid_node_matrix[sorted_order[ind]][curr_target_step][sub_idx] += (len(mid_node_matrix[sorted_order[ind]][curr_target_step]) + 1)
-
-    # --- Phase 5: Final Sequence Assembly ---
-    # Convert optimized mid-node priorities into final executable paths and operations
-    for ind, cycle_idx in enumerate(sorted_order):
+        # Retrieve the entry pointer for the current cycle sequence.
         step_ptr = entry_points[cycle_idx]
         total_steps = len(mid_node_matrix[cycle_idx])
         
-        # Minimum step count adjustment for single-transition cycles
+        # Edge case handling for degenerate cycles (single-transition cycles) to maintain sequence integrity.
         if total_steps == 1: total_steps = 2
         
+        # Iterate through all transition steps within the current cycle.
         for _ in range(total_steps - 1):
+            # Manage circular buffer indexing for the cycle sequence.
             if step_ptr >= total_steps: step_ptr = 0
             
-            # Generate the specific route and fetch corresponding operation
+            
+            # Generate the specific state trajectory based on optimized node weights and the trajectory database.
             route = generate_state_trajectory(step_ptr, mid_node_matrix[cycle_idx][step_ptr], trajectories[cycle_idx], num_units)    
+            
+            # Extract the corresponding logical operator (e.g., reversible gate) for the current transition.
             op_gate = operation_sequences[cycle_idx][step_ptr] 
             
             final_paths.append(route)
             final_ops.append(op_gate)
             step_ptr += 1
 
-    # Final circuit construction
-    circuit= assemble_reversible_circuit(final_paths, final_ops, num_units)
+    # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
+    circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
     return circuit
 
 def initialize_solution_layer(data_structure):

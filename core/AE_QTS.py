@@ -26,6 +26,7 @@ def AE_QTS_run_single_experiment(max_iterations,
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
+    global_worst_gate_count = float('-inf')
     global_best_circuit = []
     
     while current_iter < max_iterations:
@@ -39,20 +40,23 @@ def AE_QTS_run_single_experiment(max_iterations,
 
         # Step 2: Decoding and Circuit Synthesis
         # Convert quantum neighbors into concrete reversible circuit solutions
-        circuit_solutions = decode_and_synthesize(
-            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+        circuit_solutions, global_worst_gate_count = decode_and_synthesize(
+            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory, global_worst_gate_count
         )
-
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
-        solution_metrics = [(len(sol), idx) for idx, sol in enumerate(circuit_solutions)]
-        
+        # Lower scores indicate superior individuals in our minimization framework.
+        print("global_worst_gate_count",global_worst_gate_count)
+        for jk in circuit_solutions:
+            print(jk[1])
+            print(jk[2])
+            print(jk[3])
+        solution_metrics = [(sol_tuple[3], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by gate count in ascending order to identify the local optimal neighbor
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
-        
-        local_best_gate_count = sorted_metrics[0][0]
         local_best_idx = sorted_metrics[0][1]
-        local_best_circuit = circuit_solutions[local_best_idx]
+        local_best_gate_count = circuit_solutions[local_best_idx][1]
+        local_best_circuit = circuit_solutions[local_best_idx][0]
         # Step 4: Quantum Population Update (Angle Adjustment)
         # Update the probability amplitudes of qindividuals based on neighbor performance
         updateQ(

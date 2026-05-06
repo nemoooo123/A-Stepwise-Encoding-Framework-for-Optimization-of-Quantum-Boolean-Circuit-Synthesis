@@ -5,7 +5,7 @@ import time
 from utils.init_state import hamming_distance
 
 
-def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories, global_worst_gate_count):
+def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories, global_worst_gate_count, global_best_gate_count, test_666):
     """
     Decodes hierarchical binary samples into decimal values and synthesizes 
     quantum circuit routes for the entire population.
@@ -46,8 +46,8 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution ,path_continuity_fitness= synthesize_route(decoded_l1, decoded_l2, decoded_l3, 
-                                          pop_l4[i], num_units, trajectories)
+        individual_solution ,path_continuity_fitness,test_666= synthesize_route(decoded_l1, decoded_l2, decoded_l3, 
+                                          pop_l4[i], num_units, trajectories, test_666)
         
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
         # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
@@ -55,8 +55,12 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         
         # Update the global upper bound for gate count (Worst-case tracking)
         current_batch_worst = max(circuit_solutions, key=lambda x: x[1])[1]
+        current_batch_best = min(circuit_solutions, key=lambda x: x[1])[1]
         if current_batch_worst > global_worst_gate_count:
             global_worst_gate_count = current_batch_worst
+        if current_batch_best < global_best_gate_count:
+            global_best_gate_count = current_batch_best
+        
 
         # --- Dynamic Multi-Objective Fitness Computation ---
         # Re-evaluate the population using a hybrid fitness metric that balances 
@@ -68,8 +72,12 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         for i in range(len(circuit_solutions)):
             sol, gc, continuity_fit = circuit_solutions[i][:3]
             
+            
             # Normalize current gate count against the global upper bound
-            normalized_gc_component = (gc / global_worst_gate_count) * 0.5
+            if gc - global_best_gate_count ==0:
+                normalized_gc_component = 0
+            else:
+                normalized_gc_component = ((gc - global_best_gate_count)  / (global_worst_gate_count - global_best_gate_count)) * 0.5
             
             # Compute the weighted composite fitness score
             composite_fitness = normalized_gc_component + (continuity_fit * 0.5)
@@ -78,9 +86,9 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
             circuit_solutions[i] = (sol, gc, continuity_fit, composite_fitness)
 
 
-    return circuit_solutions, global_worst_gate_count
+    return circuit_solutions, global_worst_gate_count, test_666
 
-def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories): 
+def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories, test_666): 
     """
     Synthesizes the final execution route by resolving cycle sequences and inter-cycle dependencies.
     
@@ -176,12 +184,13 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
 
     # Calculate finalized fitness score
     # A higher fitness_1 indicates a lower degree of redundant coupling (approaching 1.0)
+    test_666.append(redundant_coupling_count)
     path_continuity_fitness = 1 - (redundant_coupling_count / total_adjacency_count)
 
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
     circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
 
-    return circuit, path_continuity_fitness
+    return circuit, path_continuity_fitness, test_666
 
 def initialize_solution_layer(data_structure):
     """

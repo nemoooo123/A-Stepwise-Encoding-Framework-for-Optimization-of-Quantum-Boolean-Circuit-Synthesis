@@ -46,11 +46,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        print("global_worst_gate_count",global_worst_gate_count)
-        for jk in circuit_solutions:
-            print(jk[1])
-            print(jk[2])
-            print(jk[3])
+        
         solution_metrics = [(sol_tuple[3], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by gate count in ascending order to identify the local optimal neighbor
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])

@@ -26,7 +26,6 @@ def AE_QTS_run_single_experiment(max_iterations,
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
-    global_worst_gate_count = float('-inf')
     global_best_circuit = []
     
     while current_iter < max_iterations:
@@ -40,14 +39,13 @@ def AE_QTS_run_single_experiment(max_iterations,
 
         # Step 2: Decoding and Circuit Synthesis
         # Convert quantum neighbors into concrete reversible circuit solutions
-        circuit_solutions, global_worst_gate_count = decode_and_synthesize(
-            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory, global_worst_gate_count
+        circuit_solutions = decode_and_synthesize(
+            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
         )
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        
-        solution_metrics = [(sol_tuple[3], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        solution_metrics = [(sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by gate count in ascending order to identify the local optimal neighbor
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
         local_best_idx = sorted_metrics[0][1]
@@ -80,7 +78,7 @@ def AE_QTS_run_single_experiment(max_iterations,
 
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
-def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
+def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                num_neighbors, nbr1, nbr2, nbr3, nbr4, 
                                sorted_indices, num_cycles, delta_theta):
     """

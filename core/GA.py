@@ -37,16 +37,15 @@ def GA_run_single_experiment(
     circuit_solutions = decode_and_synthesize(
         nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
     )
-    
     # Calculate initial fitness (Gate Count in this context)
     # Format: [gate_count, gate_count, ...]
-    local_fitness = [len(sol) for sol in circuit_solutions]
+    local_fitness = [sol[1] for sol in circuit_solutions]
     local_indices = list(range(num_neighbors)) # Index tracking [0, 1, 2, ...]
     # Initialize global best records
     global_best_gate_count = min(local_fitness)
     best_idx = np.argmin(local_fitness)
-    global_best_circuit = circuit_solutions[best_idx]
-    local_best_circuit = circuit_solutions[best_idx]
+    global_best_circuit = circuit_solutions[best_idx][0]
+    local_best_circuit = circuit_solutions[best_idx][0]
     # --- Evolutionary Loop ---
     current_iter = 0
     while current_iter < max_iterations:
@@ -116,14 +115,13 @@ def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, p
         circuit_solutions = decode_and_synthesize(
         [c1], [c2], [c3], [c4], encoding_table, num_bits, 1, base_trajectory
         )
-        fit = len(circuit_solutions[0])
-        
+        fit = circuit_solutions[0][1]
         # Append new individual to the population
         new_nbr1.append(c1)
         new_nbr2.append(c2)
         new_nbr3.append(c3)
         new_nbr4.append(c4)
-        new_circuit.append(circuit_solutions[0])
+        new_circuit.append(circuit_solutions[0][0])
         new_fit.append(fit)
 
     return new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit

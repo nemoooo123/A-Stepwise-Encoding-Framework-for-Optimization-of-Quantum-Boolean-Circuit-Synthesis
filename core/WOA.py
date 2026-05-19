@@ -19,7 +19,7 @@ def WOA_run_single_experiment(max_iterations, rotation_cycles, num_neighbors, nu
     
     # --- Step 2: Initial Evaluation ---
     circuit_solutions = decode_and_synthesize(nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory)
-    fitness = [len(sol) for sol in circuit_solutions]
+    fitness = [sol[1] for sol in circuit_solutions]
     current_circuits = list(circuit_solutions)
     
     # Track the global leader whale (Best individual found so far)
@@ -171,4 +171,4 @@ def evaluate_woa_fitness(child, encoding_table, num_bits, trajectories):
     c1, c2, c3, c4 = child
     # Decode single whale position (wrapped as a population of size 1)
     res = decode_and_synthesize([c1], [c2], [c3], [c4], encoding_table, num_bits, 1, trajectories)
-    return res[0], len(res[0])
+    return res[0][0], len(res[0][0])

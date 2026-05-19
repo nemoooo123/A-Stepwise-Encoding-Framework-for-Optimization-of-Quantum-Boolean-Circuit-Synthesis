@@ -31,7 +31,7 @@ def DE_run_single_experiment(
         )
     # --- Step 3: Evaluate fitness (gate count) and identify the best individual ---
     # solution_metrics stores (gate_count, original_index)
-    solution_metrics = [(len(sol), idx) for idx, sol in enumerate(circuit_solutions)]
+    solution_metrics = [(sol[1], idx) for idx, sol in enumerate(circuit_solutions)]
     # Sort by gate count (ascending order: fewer gates = better fitness)
     sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
     # Track the best solution within the current generation (local best)

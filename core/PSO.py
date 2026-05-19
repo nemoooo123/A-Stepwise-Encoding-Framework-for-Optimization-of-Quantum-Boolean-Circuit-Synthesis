@@ -36,7 +36,7 @@ def PSO_run_single_experiment(
         encoding_table, num_bits, num_neighbors, base_trajectory
     )
     # Define fitness as the gate count (Optimization goal: Minimize gate count)
-    pbest_fitness = [len(sol) for sol in circuit_solutions]
+    pbest_fitness = [sol[1] for sol in circuit_solutions]
     
     # Initialize Global Best (gBest)
     gbest_idx = np.argmin(pbest_fitness) # Find the index of the particle with the minimum gates
@@ -97,7 +97,7 @@ def PSO_run_single_experiment(
         #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
 
         # Identify local best of the current iteration (Iteration Best)
-        lbest_fitness = [len(sol) for sol in circuit_solutions]
+        lbest_fitness = [sol[1] for sol in circuit_solutions]
 
         # Identify local best of the current iteration (Iteration Best)
         lbest_idx = np.argmin(lbest_fitness) 

@@ -45,7 +45,6 @@ def QTS_run_single_experiment(max_iterations,
         circuit_solutions = decode_and_synthesize(
             nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
         )
-
         # #Integrity Verification
         # # Check if the synthesized circuits fulfill the logic requirements for the target output
         # valid_count = sum(verify_circuit_logic(sol, num_bits, target_output) for sol in circuit_solutions)
@@ -55,7 +54,7 @@ def QTS_run_single_experiment(max_iterations,
 
         # Step 3: Fitness Evaluation
         # Analyze the gate count of each synthesized solution to determine its quality.
-        solution_metrics = [(len(sol), idx) for idx, sol in enumerate(circuit_solutions)]
+        solution_metrics = [(sol[1], idx) for idx, sol in enumerate(circuit_solutions)]
         
         # Sort candidates by gate count (Ascending) to identify the elite and weak performers.
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])

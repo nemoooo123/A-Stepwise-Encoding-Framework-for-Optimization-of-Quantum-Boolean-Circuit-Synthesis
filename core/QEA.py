@@ -60,7 +60,7 @@ def QEA_run_single_experiment(max_iterations,
 
         # Step 3: Fitness Evaluation
         # Calculate the gate count for each synthesized circuit solution.
-        fitness = [len(sol) for sol in circuit_solutions]
+        fitness = [sol[1] for sol in circuit_solutions]
         local_best_idx = np.argmin(fitness)
         local_best_gate = fitness[local_best_idx]
 

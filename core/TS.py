@@ -100,7 +100,7 @@ def TS_run_single_experiment(
         """Synthesizes the circuit and returns the gate count and circuit structure."""
         sol = decode_and_synthesize([c1], [c2], [c3], [c4], 
                                      encoding_table, num_bits, 1, base_trajectory)
-        return len(sol[0]), sol[0]
+        return len(sol[0][0]), sol[0][0]
 
     # Calculate initial fitness and store as the global best for this run
     best_fitness, best_circuit = evaluate_fitness(curr_c1, curr_c2, curr_c3, curr_c4)
@@ -132,9 +132,10 @@ def TS_run_single_experiment(
         # --- Step 3: Candidate Evaluation ---
         scored_candidates = []
         # Pair each candidate state with its move_id, fitness score, and synthesized circuit
+        
         for idx in range(len(candidates)):
             state, move_id = candidates[idx]
-            circuit = circuit_solutions[idx]
+            circuit = circuit_solutions[idx][0]
             
             # Optimization Goal: Minimize gate count
             fitness = len(circuit)

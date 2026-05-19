@@ -24,7 +24,7 @@ def ABC_run_single_experiment(max_iterations,
     
     # Initial evaluation
     circuit_solutions = decode_and_synthesize(nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory)
-    fitness = [len(sol) for sol in circuit_solutions]
+    fitness = [sol[1] for sol in circuit_solutions]
     
     trials = [0] * num_neighbors # Record the number of trials without fitness improvement for each food source
     global_best_gate = min(fitness)
@@ -196,5 +196,5 @@ def evaluate_abc_fitness(child, encoding_table, num_bits, trajectories):
     """
     c1, c2, c3, c4 = child
     circuit_sols = decode_and_synthesize([c1], [c2], [c3], [c4], encoding_table, num_bits, 1, trajectories)
-    return circuit_sols[0], len(circuit_sols[0])
+    return circuit_sols[0][0], len(circuit_sols[0][0])
 

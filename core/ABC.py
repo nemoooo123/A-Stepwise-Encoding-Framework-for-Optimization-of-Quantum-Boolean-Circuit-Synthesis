@@ -22,29 +22,29 @@ def ABC_run_single_experiment(max_iterations,
     # Initialize population (Food Sources)
     nbr1, nbr2, nbr3, nbr4 = gen_nbrs(pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, num_neighbors)
     
+    global_worst_gate_count = float('-inf')
     # Initial evaluation
-    circuit_solutions = decode_and_synthesize(nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory)
-    fitness = [len(sol) for sol in circuit_solutions]
-    
+    circuit_solutions, global_worst_gate_count = decode_and_synthesize(nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory, global_worst_gate_count)
+    fitness = [sol[3] for sol in circuit_solutions]
     trials = [0] * num_neighbors # Record the number of trials without fitness improvement for each food source
     global_best_gate = min(fitness)
-    global_best_circuit = circuit_solutions[np.argmin(fitness)]
+    global_best_circuit = circuit_solutions[np.argmin(fitness)][0]
     
     current_iter = 0
     while current_iter < max_iterations:
         current_iter += 1
         new_circuit = []
         # 1. Employed Bee Phase: Local search and comparison for each food source
-        nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit = employed_bee_phase(
-            nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, base_trajectory)
+        nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit, global_worst_gate_count = employed_bee_phase(
+            nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, base_trajectory, global_worst_gate_count)
         
         # 2. Onlooker Bee Phase: Probabilistic search reinforcement based on solution quality
-        nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit = onlooker_bee_phase(
-            nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, base_trajectory)
+        nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit, global_worst_gate_count= onlooker_bee_phase(
+            nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, base_trajectory, global_worst_gate_count)
         
         # 3. Scout Bee Phase: Abandon food sources that have stagnated beyond the limit
-        nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit = scout_bee_phase(
-            nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, limit, encoding_table, num_bits, base_trajectory)
+        nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit, global_worst_gate_count = scout_bee_phase(
+            nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, limit, encoding_table, num_bits, base_trajectory, global_worst_gate_count)
         
         # Integrity Verification
         # Check if the synthesized circuits fulfill the logic requirements for the target output
@@ -59,12 +59,12 @@ def ABC_run_single_experiment(max_iterations,
             # Re-assign the best circuit structure found in this iteration
             global_best_circuit = new_circuit[best_idx]
         
-        fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate
+        fitness_history_matrix[experiment_id][current_iter - 1] = len(global_best_circuit)
 
-    return fitness_history_matrix, global_best_gate, global_best_circuit
+    return fitness_history_matrix, len(global_best_circuit), global_best_circuit
 
 # --- 1. Employed Bee Phase ---
-def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, trajectories):
+def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, trajectories, global_worst_gate_count):
     num_bees = int(len(fitness)/2)
     for i in range(num_bees):
         # Select a random neighbor j different from i
@@ -75,7 +75,7 @@ def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, enc
                                           (nbr1[j], nbr2[j], nbr3[j], nbr4[j]), num_bits )
         
         # Evaluation and Greedy Selection
-        new_per_circuit, new_fit = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories)
+        new_per_circuit, new_fit, global_worst_gate_count = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories, global_worst_gate_count)
         new_circuit.append(new_per_circuit)
 
         if new_fit < fitness[i]:
@@ -84,10 +84,10 @@ def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, enc
             trials[i] = 0
         else:
             trials[i] += 1
-    return nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit
+    return nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit, global_worst_gate_count
 
 # --- 2. Onlooker Bee Phase ---
-def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, trajectories):
+def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, encoding_table, num_bits, trajectories, global_worst_gate_count):
     
     num_bees = int(len(fitness)/2)
     # Calculate probabilities (Proportional to quality; lower gate count = higher probability)
@@ -105,7 +105,7 @@ def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, enc
         new_child = generate_abc_neighbor( (nbr1[i], nbr2[i], nbr3[i], nbr4[i]), 
                                           (nbr1[j], nbr2[j], nbr3[j], nbr4[j]), num_bits )
         
-        new_per_circuit, new_fit = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories)
+        new_per_circuit, new_fit, global_worst_gate_count = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories, global_worst_gate_count)
         new_circuit.append(new_per_circuit)
 
         if new_fit < fitness[i]:
@@ -116,10 +116,10 @@ def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, enc
             trials[i] += 1
         onlookers_dispatched += 1
         
-    return nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit
+    return nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit, global_worst_gate_count
 
 # --- 3. Scout Bee Phase ---
-def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, limit, encoding_table, num_bits, trajectories):
+def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, limit, encoding_table, num_bits, trajectories, global_worst_gate_count):
     for i in range(len(trials)):
         if trials[i] > limit:
            # Abandon food source and re-initialize randomly (Scout behavior)
@@ -155,10 +155,10 @@ def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, new_circuit, trials, limit,
                     
 
             # Re-evaluate fitness for the new scouted solution
-            new_per_circuit, fitness[i] = evaluate_abc_fitness((nbr1[i], nbr2[i], nbr3[i], nbr4[i]), encoding_table, num_bits, trajectories)
+            new_per_circuit, fitness[i], global_worst_gate_count = evaluate_abc_fitness((nbr1[i], nbr2[i], nbr3[i], nbr4[i]), encoding_table, num_bits, trajectories, global_worst_gate_count)
             new_circuit[i] = new_per_circuit
             trials[i] = 0
-    return nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit
+    return nbr1, nbr2, nbr3, nbr4, fitness, trials, new_circuit, global_worst_gate_count
 
 # --- Helper Function: Neighbor Generation (ABC Search Operator) ---
 def generate_abc_neighbor(p1, p2, num_bits):
@@ -190,11 +190,12 @@ def generate_abc_neighbor(p1, p2, num_bits):
         
     return tuple(child)
 
-def evaluate_abc_fitness(child, encoding_table, num_bits, trajectories):
+def evaluate_abc_fitness(child, encoding_table, num_bits, trajectories, global_worst_gate_count):
     """
     Decode and evaluate the gate count of a single candidate solution.
     """
     c1, c2, c3, c4 = child
-    circuit_sols = decode_and_synthesize([c1], [c2], [c3], [c4], encoding_table, num_bits, 1, trajectories)
-    return circuit_sols[0], len(circuit_sols[0])
+    circuit_sols, global_worst_gate_count = decode_and_synthesize([c1], [c2], [c3], [c4], encoding_table, num_bits, 1, trajectories, global_worst_gate_count)
+    
+    return circuit_sols[0][0], circuit_sols[0][3], global_worst_gate_count
 

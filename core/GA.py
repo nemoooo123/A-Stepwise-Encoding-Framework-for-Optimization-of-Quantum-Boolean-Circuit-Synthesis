@@ -27,26 +27,26 @@ def GA_run_single_experiment(
     Execute a single experiment using Genetic Algorithm (GA).
     Manages the evolutionary process: initialization, evaluation, and global best tracking.
     """
-
+    global_worst_gate_count = float('-inf')
     # --- Population Initialization ---
     # Generate initial neighbors (individuals) based on the input population matrices
     nbr1, nbr2, nbr3, nbr4 = gen_nbrs(pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, num_neighbors)
     
     # --- Initial Evaluation ---
     # Decode encoding layers and synthesize them into quantum circuits
-    circuit_solutions = decode_and_synthesize(
-        nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+    circuit_solutions, global_worst_gate_count = decode_and_synthesize(
+        nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory, global_worst_gate_count
     )
     
     # Calculate initial fitness (Gate Count in this context)
     # Format: [gate_count, gate_count, ...]
-    local_fitness = [len(sol) for sol in circuit_solutions]
+    local_fitness = [sol[3] for sol in circuit_solutions]
     local_indices = list(range(num_neighbors)) # Index tracking [0, 1, 2, ...]
     # Initialize global best records
     global_best_gate_count = min(local_fitness)
     best_idx = np.argmin(local_fitness)
-    global_best_circuit = circuit_solutions[best_idx]
-    local_best_circuit = circuit_solutions[best_idx]
+    global_best_circuit = circuit_solutions[best_idx][0]
+    local_best_circuit = circuit_solutions[best_idx][0]
     # --- Evolutionary Loop ---
     current_iter = 0
     while current_iter < max_iterations:
@@ -54,9 +54,9 @@ def GA_run_single_experiment(
         
         # Execute core GA operations: Selection, Crossover, Mutation, and Evaluation
         # Returns new generation's encoding, fitness, and synthesized circuits
-        nbr1, nbr2, nbr3, nbr4, local_fitness, local_circuit = Genetic_Algorithm_Core(
+        nbr1, nbr2, nbr3, nbr4, local_fitness, local_circuit, global_worst_gate_count = Genetic_Algorithm_Core(
             nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, pc, pm,
-            encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory
+            encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory,global_worst_gate_count
         )
         # --- Update Global Best Solution ---
         # Find the best individual in the current generation
@@ -71,13 +71,13 @@ def GA_run_single_experiment(
             global_best_circuit = local_best_circuit
 
         # Log historical data for convergence curve plotting
-        fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
+        fitness_history_matrix[experiment_id][current_iter - 1] = len(global_best_circuit)
 
-    return fitness_history_matrix, global_best_gate_count, global_best_circuit
+    return fitness_history_matrix, len(global_best_circuit), global_best_circuit
 
 
 def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, pc, pm,
-                           encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory):
+                           encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory, global_worst_gate_count):
     """
     Execution of single generation GA logic: Elitism -> Selection -> Crossover -> Mutation -> Evaluation.
     """
@@ -113,20 +113,20 @@ def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, p
         c1, c2, c3, c4 = child
 
         # Evaluate the new offspring
-        circuit_solutions = decode_and_synthesize(
-        [c1], [c2], [c3], [c4], encoding_table, num_bits, 1, base_trajectory
+        circuit_solutions, global_worst_gate_count = decode_and_synthesize(
+        [c1], [c2], [c3], [c4], encoding_table, num_bits, 1, base_trajectory, global_worst_gate_count
         )
-        fit = len(circuit_solutions[0])
+        fit = circuit_solutions[0][3]
         
         # Append new individual to the population
         new_nbr1.append(c1)
         new_nbr2.append(c2)
         new_nbr3.append(c3)
         new_nbr4.append(c4)
-        new_circuit.append(circuit_solutions[0])
+        new_circuit.append(circuit_solutions[0][0])
         new_fit.append(fit)
 
-    return new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit
+    return new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit, global_worst_gate_count
 
 def tournament_selection(fitness_list, idx_list, k):
     """

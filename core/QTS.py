@@ -27,6 +27,7 @@ def QTS_run_single_experiment(max_iterations,
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
+    global_worst_gate_count = float('-inf')
     global_best_circuit = []
     
     # --- QTS Main Evolution Loop ---
@@ -42,8 +43,8 @@ def QTS_run_single_experiment(max_iterations,
 
         # Step 2: Decoding and Circuit Synthesis
         # Transform the sampled quantum neighbors into concrete reversible circuit structures.
-        circuit_solutions = decode_and_synthesize(
-            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+        circuit_solutions, global_worst_gate_count = decode_and_synthesize(
+            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory,global_worst_gate_count
         )
 
         # #Integrity Verification
@@ -55,14 +56,14 @@ def QTS_run_single_experiment(max_iterations,
 
         # Step 3: Fitness Evaluation
         # Analyze the gate count of each synthesized solution to determine its quality.
-        solution_metrics = [(len(sol), idx) for idx, sol in enumerate(circuit_solutions)]
+        solution_metrics = [(sol[3], idx) for idx, sol in enumerate(circuit_solutions)]
         
         # Sort candidates by gate count (Ascending) to identify the elite and weak performers.
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
         
-        local_best_gate_count = sorted_metrics[0][0]
         local_best_idx = sorted_metrics[0][1]
-        local_best_circuit = circuit_solutions[local_best_idx]
+        local_best_gate_count = circuit_solutions[local_best_idx][1]
+        local_best_circuit = circuit_solutions[local_best_idx][0]
 
         # Step 4: QTS Quantum State Update
         # Apply the 'best-vs-worst' strategy to rotate the quantum states.

@@ -30,6 +30,7 @@ def QEA_run_single_experiment(max_iterations,
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
+    global_worst_gate_count = float('-inf')
     global_best_circuit = []
 
     # Track the Global Best Position (gb_pos) across layers ---
@@ -48,8 +49,8 @@ def QEA_run_single_experiment(max_iterations,
 
         # Step 2: Decoding and Circuit Synthesis
         # Transform the sampled quantum neighbors into concrete reversible circuit structures.
-        circuit_solutions = decode_and_synthesize(
-            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+        circuit_solutions, global_worst_gate_count = decode_and_synthesize(
+            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory, global_worst_gate_count
         )
         # #Integrity Verification
         # # Check if the synthesized circuits fulfill the logic requirements for the target output
@@ -60,7 +61,7 @@ def QEA_run_single_experiment(max_iterations,
 
         # Step 3: Fitness Evaluation
         # Calculate the gate count for each synthesized circuit solution.
-        fitness = [len(sol) for sol in circuit_solutions]
+        fitness = [sol[3] for sol in circuit_solutions]
         local_best_idx = np.argmin(fitness)
         local_best_gate = fitness[local_best_idx]
 
@@ -68,7 +69,7 @@ def QEA_run_single_experiment(max_iterations,
         # If the current local best is superior to the historical global best, update records.
         if local_best_gate < global_best_gate_count:
             global_best_gate_count = local_best_gate
-            global_best_circuit = circuit_solutions[local_best_idx]
+            global_best_circuit = circuit_solutions[local_best_idx][0]
             # Store the elite "Position Genes" for quantum rotation reinforcement
             gb_pos1 = copy.deepcopy(nbr1[local_best_idx])
             gb_pos2 = copy.deepcopy(nbr2[local_best_idx])
@@ -86,10 +87,10 @@ def QEA_run_single_experiment(max_iterations,
 
         # Step 6: Data Recording for Convergence Analysis
         # Store the current global minimum gate count into the fitness history matrix.
-        fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
+        fitness_history_matrix[experiment_id][current_iter - 1] = len(global_best_circuit)
 
     # Returns the convergence history and the optimal circuit found via QEA optimization.
-    return fitness_history_matrix, global_best_gate_count, global_best_circuit
+    return fitness_history_matrix, len(global_best_circuit), global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
                             gb_pos1, gb_pos2, gb_pos3, gb_pos4, 

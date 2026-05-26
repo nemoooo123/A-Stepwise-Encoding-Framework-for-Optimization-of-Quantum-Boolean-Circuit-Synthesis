@@ -27,6 +27,8 @@ def AE_QTS_run_single_experiment(max_iterations,
     current_iter = 0
     global_best_gate_count = float('inf')
     global_best_circuit = []
+
+    tmp_fitness = []
     
     while current_iter < max_iterations:
         current_iter += 1
@@ -45,12 +47,20 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        solution_metrics = [(sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        # print("circuit_solutions",circuit_solutions)
+        solution_metrics = [(sol_tuple[3], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by gate count in ascending order to identify the local optimal neighbor
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
-        local_best_idx = sorted_metrics[0][1]
-        local_best_gate_count = circuit_solutions[local_best_idx][1]
-        local_best_circuit = circuit_solutions[local_best_idx][0]
+        tmm=min(sorted_metrics)
+        # print("circuit_solutions",circuit_solutions[0])
+        tmp_fitness.append(circuit_solutions[tmm[1]][2])
+        true_fitness_list = [(sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        sorted_metrics_2 = sorted(true_fitness_list, key=lambda x: x[0])
+        # 找出真正實體閘數 [1] 最低的組合
+        best_true_pair = min(true_fitness_list)
+        
+        local_best_circuit = circuit_solutions[best_true_pair[1]][0]
+        local_best_gate_count = best_true_pair[0]
         # Step 4: Quantum Population Update (Angle Adjustment)
         # Update the probability amplitudes of qindividuals based on neighbor performance
         updateQ(
@@ -75,7 +85,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Record the current best gate count into the fitness history matrix (used for np.mean later)
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
 
-
+    print("tmpfitness",tmp_fitness)
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,

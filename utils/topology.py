@@ -17,6 +17,9 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         pop_size: Total individuals in population (N).
         trajectories: Database of transition paths (trans).
     """
+
+    alpha = 2
+    beta = 2
     circuit_solutions = []
     
     for i in range(pop_size):
@@ -46,16 +49,14 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3, 
-                                          pop_l4[i], num_units, trajectories)
+        individual_solution, sigmal_mid_count = synthesize_route(decoded_l1, decoded_l2, decoded_l3, 
+                                          pop_l4[i], num_units, trajectories, alpha, beta)
         
-        # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
-        # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
-        circuit_solutions.append((individual_solution,len(individual_solution)))
+        circuit_solutions.append((individual_solution,len(individual_solution),sigmal_mid_count,(len(individual_solution)-sigmal_mid_count)))
         
     return circuit_solutions
 
-def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories): 
+def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories, alpha, beta): 
     """
     Synthesizes the final execution route by resolving cycle sequences and inter-cycle dependencies.
     
@@ -111,48 +112,76 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
 
     # N_total_adjacent: Total number of potential coupling points between segments
     total_adjacency_count = len(final_paths) - 1
-    redundant_coupling_count = 0
-
+    #中間節點先看左右有沒有一樣
+    #不一樣代表是循環之間的情況 只需要加一次
+    #一樣的畫 先抓好陣列 並且取短的 抓hd
+    sigmal_mid_count= 0
     for i in range(total_adjacency_count):
         # Segment pair extraction for adjacency analysis
         segment_current = final_paths[i]
         segment_next = final_paths[i+1]
-        
         # CASE 1: Standard Sequential Adjacency (Intra-cycle or direct flow)
         # Check if the terminal node of segment[i] aligns with the initial node of segment[i+1]
         if segment_current[-1] == segment_next[0]:
-            # Symmetric Redundancy Check: Verify if the preceding and succeeding nodes are identical
-            # This implies a reversible transition that can be eliminated (Gate reduction)
-            if segment_current[-2] == segment_next[1]:
-                redundant_coupling_count += 1
+            #取最小的 看是當前還是下一個
+            ind = min(len(segment_current),len(segment_next))-2
+            pair = 0 #後續連鎖
+            for nu in range(ind):
+                if nu==0:
+                    local = segment_current[-2-nu]
+                    local_next = segment_next[1+nu]
+                    #取得位元差
+                    mid_minus = hamming_distance(local,local_next)
+                    #公式是 a/位元差+1 alpha
+                    if mid_minus == 0:
+                        sigmal_mid_count += alpha
+                    # else:
+                    #     sigmal_mid_count += (alpha / (mid_minus **2))
+                else:
+                    if mid_minus==0: #等於的時候才有用
+                        local = segment_current[-2-nu]
+                        local_next = segment_next[1+nu]
+                        #取得位元差
+                        mid_minus = hamming_distance(local,local_next)
+                        if mid_minus == 0:
+                            sigmal_mid_count += alpha
+            # sigmal_mid_count += (pair * beta)
+            # for nu in range(ind):
+            #     local = segment_current[-2-nu]
+            #     local_next = segment_next[1+nu]
+            #     #取得位元差
+            #     mid_minus = hamming_distance(local,local_next)
+            #     #公式是 a/位元差+1 alpha
+            #     if mid_minus == 0:
+            #         sigmal_mid_count += alpha
+            #     else:
+            #         sigmal_mid_count += (alpha / (mid_minus +1))
+                
                 
         # CASE 2: Strategic Cross-Boundary Adjacency (Inter-cycle or non-linear flow)
         # Analyze four boundary alignment permutations for potential logic reduction
         else:
-            # Tail-to-Head Symmetry Analysis (Offset 1)
-            if segment_current[-1] == segment_next[1]:
-                if segment_current[-2] == segment_next[0]:
-                    redundant_coupling_count += 1
-            
-            # Head-to-Head Symmetry Analysis
-            elif segment_current[0] == segment_next[1]:
-                if segment_current[1] == segment_next[0]:
-                    redundant_coupling_count += 1
-            
-            # Tail-to-Tail Symmetry Analysis
-            elif segment_current[-1] == segment_next[-2]:
-                if segment_current[-2] == segment_next[-1]:
-                    redundant_coupling_count += 1
-            
-            # Head-to-Tail Symmetry Analysis
-            elif segment_current[0] == segment_next[-2]:
-                if segment_current[1] == segment_next[-1]:
-                    redundant_coupling_count += 1
+            #比哪一段是最短的 算他的分數
+            mid_minus_1 = hamming_distance(segment_current[-1], segment_next[1]) + hamming_distance(segment_current[-2], segment_next[0])
 
+            mid_minus_2 = hamming_distance(segment_current[0], segment_next[1]) + hamming_distance(segment_current[1], segment_next[0])
+            
+            mid_minus_3 = hamming_distance(segment_current[-1], segment_next[-2]) + hamming_distance(segment_current[-2], segment_next[-1])
+            
+            mid_minus_4 = hamming_distance(segment_current[0], segment_next[-2]) + hamming_distance(segment_current[1], segment_next[-1])
+                
+            #這四個分數取最低的最好 
+            minus_list = [mid_minus_1, mid_minus_2, mid_minus_3, mid_minus_4]
+            mid_minus = min(minus_list)
+            #put in
+            if mid_minus == 0:
+                sigmal_mid_count += alpha
+            else:
+                sigmal_mid_count += (alpha /  (mid_minus +1))
+          
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
     circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
-
-    return circuit
+    return circuit, sigmal_mid_count
 
 def initialize_solution_layer(data_structure):
     """

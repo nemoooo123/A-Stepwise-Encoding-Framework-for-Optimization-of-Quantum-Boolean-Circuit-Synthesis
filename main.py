@@ -2,6 +2,7 @@ import numpy as np
 import time
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
 from utils.data_loader import DataLoader
 from utils.init_state import find_cycles, build_encode
 from core.AE_QTS import AE_QTS_run_single_experiment
@@ -39,7 +40,7 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 2
+    num_experiments = 10
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
@@ -48,6 +49,7 @@ def main():
     # Pre-allocate matrix for convergence analysis (Rows: Experiments, Cols: Generations)
     # Using float('inf') as default to easily track minimization progress
     fitness_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
+    unique_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -64,6 +66,7 @@ def main():
             print(f"Experiment {r+1}: Identity mapping detected (Zero gates required).")
             best_scores_per_experiment.append(0)
             fitness_history_matrix[r, :] = 0
+            unique_history_matrix[r, :] = 0
             continue
 
         if algo_choice == 1:  # AE-QTS (Amplitude-Ensemble Quantum-Inspired Tabu Search)
@@ -71,7 +74,7 @@ def main():
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
             
             # Step 3: Run the core search algorithm for a single experiment
-            fitness_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -84,10 +87,11 @@ def main():
                 qindividuals3 = qindividuals3,
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
+                unique_history_matrix = unique_history_matrix,
                 target_output = target_output,
                 delta_theta = 0.01
             )
-            
+
         elif algo_choice == 2: # QTS (Quantum-Inspired Tabu Search)
             # Step 2: Initialize Quantum Individuals and Encoding Tables
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
@@ -162,7 +166,11 @@ def main():
             # Step 1: Initialize Encoding Fram
             pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
             
-            fitness_history_matrix, final_best_gate , best_circuit_this_run = DE_run_single_experiment(
+            # Note: DE_run_single_experiment's own "fitness_history_matrix" param tracks the
+            # unique-gate-count objective it searches on, while its "unique_history_matrix" param
+            # carries the paired total gate count. Swap on unpack so main.py's fitness_history_matrix
+            # always means "total" and unique_history_matrix always means "unique", matching AE-QTS.
+            fitness_history_matrix, unique_history_matrix, final_best_gate, best_circuit_this_run = DE_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -174,7 +182,8 @@ def main():
                 pop_matrix2 = pop_matrix2,
                 pop_matrix3 = pop_matrix3,
                 pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = fitness_history_matrix,
+                fitness_history_matrix = unique_history_matrix,
+                unique_history_matrix = fitness_history_matrix,
                 target_output = target_output,
                 CR = 0.05,
             )
@@ -276,7 +285,13 @@ def main():
     # Calculate the average gate count across all experiments for each generation
     average_convergence_curve = np.mean(fitness_history_matrix, axis=0)
     std_convergence_curve = np.std(fitness_history_matrix, axis=0)
-    
+
+    # Unique gate count convergence is only populated for algorithms that track it (AE-QTS, DE)
+    has_unique_data = algo_choice in (1, 5)
+    if has_unique_data:
+        average_unique_curve = np.mean(unique_history_matrix, axis=0)
+
+
     global_min_gate = min(best_scores_per_experiment)
     best_exp_index = best_scores_per_experiment.index(global_min_gate) # Identify the most successful trial
     absolute_best_circuit = best_circuit_per_experiment[best_exp_index]
@@ -302,6 +317,21 @@ def main():
     base_filename = f"{algo_name}_{num_bits}_{problem_idx}"
     txt_path = os.path.join(save_dir, f"{base_filename}.txt")
     xlsx_path = os.path.join(save_dir, f"{base_filename}.xlsx")
+
+    # --- Generate Averaged Convergence Plot (across all experiments) ---
+    plt.figure()
+    iterations = range(1, max_iterations + 1)
+    plt.plot(iterations, average_convergence_curve, label='avg total gate count')
+    if has_unique_data:
+        plt.plot(iterations, average_unique_curve, label='avg unique gate count')
+    plt.xlabel('Iteration')
+    plt.ylabel('Gate Count')
+    plt.title(f'{algo_name} Averaged Convergence Curve ({num_experiments} experiments)')
+    plt.legend()
+    avg_plot_path = os.path.join(save_dir, f"{base_filename}_avg_convergence.png")
+    plt.savefig(avg_plot_path)
+    plt.close()
+    print(f"[System] Averaged convergence plot saved to: {avg_plot_path}")
 
     # --- Generate TXT Summary Report ---
     # This file provides a quick overview of the best results and system performance

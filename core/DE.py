@@ -3,6 +3,7 @@ from utils.topology import decode_and_synthesize, synthesize_route, verify_circu
 import numpy as np
 import random
 import copy
+import matplotlib.pyplot as plt
 def DE_run_single_experiment(
                 max_iterations ,
                 rotation_cycles ,
@@ -31,9 +32,10 @@ def DE_run_single_experiment(
         )
     # --- Step 3: Evaluate fitness (gate count) and identify the best individual ---
     # solution_metrics stores (gate_count, original_index)
-    solution_metrics = [(sol_tuple[2], sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+    solution_metrics = [(sol_tuple[1], sol_tuple[2], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
-    sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
+    sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1], x[0]))
+    
     # Track the best solution within the current generation (local best)
     local_best_gate_count = sorted_metrics[0][0]
     local_best_idx = sorted_metrics[0][2]
@@ -42,6 +44,8 @@ def DE_run_single_experiment(
     current_iter = 0
     global_best_gate_count = float('inf')
     global_best_circuit = []
+    a0706 = []
+    b0706 = []
     # --- Step 4: Evolution Loop ---
     while current_iter < max_iterations:
         current_iter += 1
@@ -55,9 +59,9 @@ def DE_run_single_experiment(
         
         solution_metrics = [(sol[0], sol[1], idx) for idx, sol in enumerate(new_fit)]
         
-        sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
-        print("sorted_metrics",sorted_metrics)
-        local_best_gate_count = sorted_metrics[0][1]
+        sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1], x[0]))
+        
+        local_best_gate_count = sorted_metrics[0][0]
         local_best_idx = sorted_metrics[0][2]
         local_best_circuit = circuit_solutions[local_best_idx]
         
@@ -71,8 +75,21 @@ def DE_run_single_experiment(
         
         # if valid_count != num_neighbors:
         #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
-
+        
+        
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
+        a0706.append(sorted_metrics[0][1])
+        b0706.append(sorted_metrics[0][0])
+    plt.figure()
+    plt.plot(range(1, max_iterations + 1), a0706, label='total gate count (best)')
+    plt.plot(range(1, max_iterations + 1), b0706, label='unique gate count (best)')
+    plt.xlabel('Iteration')
+    plt.ylabel('Gate Count')
+    plt.title(f'Convergence Curve - Experiment {experiment_id}')
+    plt.legend()
+    plt.savefig(f'convergence_de_exp{experiment_id}.png')
+    plt.close()
+
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
 
@@ -297,17 +314,31 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
     history_idx = local_best_idx.index(index)
     target_fitness_1=local_no_repeat_best_gate_count[history_idx]
     target_fitness_2=local_best_gate_count[history_idx]
-    if gate_set < target_fitness_1:
+    if trial_fitness < target_fitness_2:
         
-        return trial_n1,trial_n2,trial_n3,trial_n4,[gate_set, trial_fitness], synthesized_circuit
-    elif gate_set == target_fitness_1:
-        if trial_fitness <= target_fitness_2:
-           return trial_n1,trial_n2,trial_n3,trial_n4,[gate_set, trial_fitness], synthesized_circuit
+        return trial_n1,trial_n2,trial_n3,trial_n4,[trial_fitness, gate_set], synthesized_circuit
+    elif trial_fitness == target_fitness_2:
+        if gate_set <= target_fitness_1:
+           return trial_n1,trial_n2,trial_n3,trial_n4,[trial_fitness, gate_set], synthesized_circuit
         else:
             # Return the original target individual if the trial individual is worse
             return (nbr1[index], nbr2[index],
-        nbr3[index], nbr4[index], [target_fitness_1,target_fitness_2], circuit_solutions[history_idx])
+        nbr3[index], nbr4[index], [target_fitness_2, target_fitness_1], circuit_solutions[history_idx])
     else:
         # Return the original target individual if the trial individual is worse
         return (nbr1[index], nbr2[index],
-    nbr3[index], nbr4[index], [target_fitness_1,target_fitness_2], circuit_solutions[history_idx])
+    nbr3[index], nbr4[index], [target_fitness_2, target_fitness_1], circuit_solutions[history_idx])
+    # if gate_set < target_fitness_1:
+        
+    #     return trial_n1,trial_n2,trial_n3,trial_n4,[gate_set, trial_fitness], synthesized_circuit
+    # elif gate_set == target_fitness_1:
+    #     if trial_fitness <= target_fitness_2:
+    #        return trial_n1,trial_n2,trial_n3,trial_n4,[gate_set, trial_fitness], synthesized_circuit
+    #     else:
+    #         # Return the original target individual if the trial individual is worse
+    #         return (nbr1[index], nbr2[index],
+    #     nbr3[index], nbr4[index], [target_fitness_1,target_fitness_2], circuit_solutions[history_idx])
+    # else:
+    #     # Return the original target individual if the trial individual is worse
+    #     return (nbr1[index], nbr2[index],
+    # nbr3[index], nbr4[index], [target_fitness_1,target_fitness_2], circuit_solutions[history_idx])

@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 from utils.init_state import gen_nbrs
 from utils.topology import decode_and_synthesize,verify_circuit_logic
 
@@ -22,7 +23,8 @@ def AE_QTS_run_single_experiment(max_iterations,
     Executes a single trial of the AE-QTS algorithm.
     Iteratively updates quantum individuals (qindividuals1-4) to minimize circuit gate count.
     """
-    
+    a0706=[]
+    b0706=[]
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
@@ -47,7 +49,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Lower scores indicate superior individuals in our minimization framework.
         solution_metrics = [(sol_tuple[2], sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
-        sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
+        sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1], x[0]))
         local_best_idx = sorted_metrics[0][2]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
         local_best_circuit = circuit_solutions[local_best_idx][0]
@@ -74,7 +76,18 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 7: Data Recording for Statistical Analysis
         # Record the current best gate count into the fitness history matrix (used for np.mean later)
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
+        a0706.append(sorted_metrics[0][1])
+        b0706.append(sorted_metrics[0][0])
 
+    plt.figure()
+    plt.plot(range(1, max_iterations + 1), a0706, label='total gate count (best)')
+    plt.plot(range(1, max_iterations + 1), b0706, label='unique gate count (best)')
+    plt.xlabel('Iteration')
+    plt.ylabel('Gate Count')
+    plt.title(f'ConvergenceCurve - Experiment {experiment_id}')
+    plt.legend()
+    plt.savefig(f'convergence_aeqts_ini_exp{experiment_id}.png')
+    plt.close()
 
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 

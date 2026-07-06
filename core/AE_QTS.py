@@ -45,10 +45,10 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        solution_metrics = [(sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
-        # Sort by gate count in ascending order to identify the local optimal neighbor
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
-        local_best_idx = sorted_metrics[0][1]
+        solution_metrics = [(sol_tuple[2], sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
+        sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
+        local_best_idx = sorted_metrics[0][2]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
         local_best_circuit = circuit_solutions[local_best_idx][0]
         # Step 4: Quantum Population Update (Angle Adjustment)
@@ -56,7 +56,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         updateQ(
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
             num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-            [m[1] for m in sorted_metrics], num_cycles, delta_theta
+            [m[2] for m in sorted_metrics], num_cycles, delta_theta
         )
 
         # Step 5: Global Best Tracking

@@ -46,12 +46,18 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3, 
+        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
                                           pop_l4[i], num_units, trajectories)
-        
+
+        # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
+        gate_set = set(tuple(gate) for gate in individual_solution)
+        # duplicate_count = len(individual_solution) - len(gate_set)
+        # print(f"individual {i}: total={len(individual_solution)} unique={len(gate_set)} duplicates={duplicate_count}")
+
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
         # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
-        circuit_solutions.append((individual_solution,len(individual_solution)))
+        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set)))
+        # print("circuit_solutions",circuit_solutions)
         
     return circuit_solutions
 

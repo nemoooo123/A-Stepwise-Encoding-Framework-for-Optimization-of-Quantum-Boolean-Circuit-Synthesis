@@ -64,6 +64,7 @@ def DE_run_single_experiment(
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
         #原始版本
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
+        
         local_best_idx = sorted_metrics[0][2]
         local_best_gate_count = sorted_metrics[0][0]
         local_best_circuit = circuit_solutions[local_best_idx]
@@ -72,7 +73,10 @@ def DE_run_single_experiment(
             global_best_gate_count = local_best_gate_count
             global_best_total_count = sorted_metrics[0][1]
             global_best_circuit = local_best_circuit
-
+        # if current_iter <5:
+        #     print("sorted_metrics",sorted_metrics)
+        #     print("local_best_gate_count",local_best_gate_count)
+        #     print("global_best_gate_count",global_best_gate_count)
         # Step 6: Integrity Verification
         # Check if the synthesized circuits fulfill the logic requirements for the target output
         # valid_count = sum(verify_circuit_logic(sol, num_bits, target_output) for sol in circuit_solutions)
@@ -84,7 +88,7 @@ def DE_run_single_experiment(
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
         unique_history_matrix[experiment_id][current_iter - 1] = global_best_total_count
         
-    
+    # print("fitness_history_matrix",fitness_history_matrix)
 
     return fitness_history_matrix, unique_history_matrix, global_best_gate_count, global_best_circuit
 
@@ -307,6 +311,14 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
     gate_set = len(set(tuple(gate) for gate in synthesized_circuit))
 
     trial_fitness=len(synthesized_circuit)
+    #標記
+    if trial_fitness==26:
+        print("26gc")
+        print("電路各編碼")
+        print(decoded_n1)
+        print(decoded_n2)
+        print(decoded_n3)
+        print(trial_n4)
     history_idx = local_best_idx.index(index)
     target_fitness_1=local_no_repeat_best_gate_count[history_idx]
     target_fitness_2=local_best_gate_count[history_idx]

@@ -190,7 +190,7 @@ def gen_nbrs(prob_layer_L1, prob_layer_L2, prob_layer_L3, prob_layer_L4, populat
     candidates_L2 = [sample_layer_L2(prob_layer_L2) for _ in range(population_size)]  
     
     # Sample Layer 3: Intermediate path node candidates
-    candidates_L3 = [sample_layer_L3(prob_layer_L3) for _ in range(population_size)]
+    candidates_L3 = [sample_layer_L3_new(prob_layer_L3) for _ in range(population_size)]
     
     # Sample Layer 4: Gate sequencing/order candidates
     candidates_L4 = [sample_layer_L4(prob_layer_L4) for _ in range(population_size)]
@@ -222,9 +222,8 @@ def sample_layer_L1(prob_matrices):
         
         selection_results.append(binary_code)
     
-    
-    
-    return selection_results
+    return [[1],[1]]
+    # return selection_results
 
 def sample_layer_L2(prob_matrices_L2):
     """
@@ -253,9 +252,58 @@ def sample_layer_L2(prob_matrices_L2):
 
         break_edge_codes.append(binary_string)
     
-    return break_edge_codes
+    return [[0,0,0,0],[0,1,0]]
+    # return break_edge_codes
 
 def sample_layer_L3(prob_matrices_L3):
+    """
+    Sample from Layer 3 probability matrices to determine intermediate path nodes.
+    This handles multi-bit Hamming distance transitions by selecting specific nodes
+    within the Boolean hypercube for each transformation step.
+    """
+    # path_selection_results: Stores sampled nodes for all cycles and their steps
+    path_selection_results = []
+    
+    # Iterate through each cycle component
+    for cycle_idx in range(len(prob_matrices_L3)):
+        cycle_path_samples = []
+        
+        # Iterate through each transition step (swap/transformation) within the cycle
+        for step_idx in range(len(prob_matrices_L3[cycle_idx])):
+            step_node_codes = []
+            
+            # Identify if the current step is a direct transition (indicated by [999,999])
+            # num_substeps represents the number of intermediate points in this transition
+            num_substeps = len(prob_matrices_L3[cycle_idx][step_idx])
+            
+            for substep_matrix in prob_matrices_L3[cycle_idx][step_idx]:
+                # binary_node: The sampled binary string for an intermediate state
+                binary_node = []
+                
+                if num_substeps == 1:
+                    # Identifier 999 indicates a direct 1-bit Hamming distance (no intermediate node needed)
+                    step_node_codes.append(999)
+                else:
+                    # Perform bit-wise stochastic sampling for the intermediate node
+                    for bit_prob in substep_matrix:
+                        random_threshold = np.random.rand(1)
+                        
+                        if bit_prob[0] < random_threshold:
+                            binary_node.append(1)
+                        else:
+                            binary_node.append(0)
+                    
+                    # Store the sampled binary representation for this specific node
+                    step_node_codes.append(binary_node)
+            
+            # Append the collection of nodes for this step to the cycle's path
+            cycle_path_samples.append(step_node_codes)
+            
+        # Append the complete cycle path to the global result list
+        path_selection_results.append(cycle_path_samples)
+
+    return path_selection_results
+def sample_layer_L3_new(prob_matrices_L3):
     """
     Sample from Layer 3 probability matrices to determine intermediate path nodes.
     This handles multi-bit Hamming distance transitions by selecting specific nodes

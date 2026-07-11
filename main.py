@@ -40,7 +40,7 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 10
+    num_experiments = 100
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
@@ -182,8 +182,8 @@ def main():
                 pop_matrix2 = pop_matrix2,
                 pop_matrix3 = pop_matrix3,
                 pop_matrix4 = pop_matrix4,
-                fitness_history_matrix = unique_history_matrix,
-                unique_history_matrix = fitness_history_matrix,
+                fitness_history_matrix = fitness_history_matrix,
+                unique_history_matrix = unique_history_matrix,
                 target_output = target_output,
                 CR = 0.05,
             )

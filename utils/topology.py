@@ -156,6 +156,7 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
                     redundant_coupling_count += 1
 
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
+    
     circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
 
     return circuit

@@ -75,6 +75,10 @@ def build_encode(cycles):
     # acts as a mapping constraint to ensure sampled results correctly align 
     # with valid cycle nodes and prevent indexing errors during edge breaking.
     node_mapping_index=[] 
+
+    #新增
+    path_mapping_index=[] 
+
     # transition_trajectories: Stores the "transition_trajectoriesition Path" for each cycle.
     # It records the sequence of nodes after cycle reversal and 
     # closure (returning to the start node), providing the exact 
@@ -98,6 +102,7 @@ def build_encode(cycles):
         # Calculate Hamming distances between elements to generate Layer 3
         cycle_path_probs=[] #Nested list for a single cycle's Layer 3 data
         cycle_seq_probs=[] # Nested list for a single cycle's Layer 4 data
+        path_mapping_index_probs= []
 
         i.reverse() # Reverse the cycle to ensure correct circuit synthesis order
         
@@ -112,9 +117,9 @@ def build_encode(cycles):
                 end=i[x+1]  
                 # Identify Hamming distance between consecutive states
                 dist_hamming=hamming_distance(start,end)
+                path_mapping_index_probs.append(dist_hamming)
                 required_encoding_bits = ceil(log2(dist_hamming)) 
                 
-                # print(required_encoding_bits)
                 step_path_probs=[]
                 if required_encoding_bits==0:
                     # Identifier for 1-bit difference (no complex sequence needed)
@@ -123,7 +128,7 @@ def build_encode(cycles):
                 else:
                     step_path_prob_matrix=np.zeros((required_encoding_bits,2)) # Layer 3: Probability matrix for permutation selection
                     step_path_prob_matrix.fill(1 / 2)
-                    for step_idx in range(dist_hamming):
+                    for step_idx in range(dist_hamming-1): #修改點 -1 為的不納入end點的可能
                         step_path_probs.append(step_path_prob_matrix)
                     cycle_path_probs.append(step_path_probs)
 
@@ -147,6 +152,7 @@ def build_encode(cycles):
             start=i[0]
             end=i[1]
             dist_hamming=hamming_distance(start,end)
+            path_mapping_index_probs.append(dist_hamming)
             required_encoding_bits = ceil(log2(dist_hamming))
 
             step_path_probs=[]
@@ -156,7 +162,7 @@ def build_encode(cycles):
             else:
                 step_path_prob_matrix=np.zeros((required_encoding_bits,2)) 
                 step_path_prob_matrix.fill(1 / 2)
-                for q33 in range(dist_hamming):
+                for q33 in range(dist_hamming-1):#修改點 -1 為的不納入end點的可能
                     step_path_probs.append(step_path_prob_matrix)
                 cycle_path_probs.append(step_path_probs)
 
@@ -174,8 +180,9 @@ def build_encode(cycles):
 
         prob_layer_path_nodes.append(cycle_path_probs)
         prob_layer_seq_order.append(cycle_seq_probs) 
+        path_mapping_index.append(path_mapping_index_probs)
 
-    return prob_layer_cycle_select, prob_layer_edge_break, prob_layer_path_nodes, prob_layer_seq_order, node_mapping_index, transition_trajectories
+    return prob_layer_cycle_select, prob_layer_edge_break, prob_layer_path_nodes, prob_layer_seq_order, node_mapping_index, path_mapping_index, transition_trajectories
 
 def gen_nbrs(prob_layer_L1, prob_layer_L2, prob_layer_L3, prob_layer_L4, population_size):
     """
@@ -190,7 +197,7 @@ def gen_nbrs(prob_layer_L1, prob_layer_L2, prob_layer_L3, prob_layer_L4, populat
     candidates_L2 = [sample_layer_L2(prob_layer_L2) for _ in range(population_size)]  
     
     # Sample Layer 3: Intermediate path node candidates
-    candidates_L3 = [sample_layer_L3_new(prob_layer_L3) for _ in range(population_size)]
+    candidates_L3 = [sample_layer_L3(prob_layer_L3) for _ in range(population_size)]
     
     # Sample Layer 4: Gate sequencing/order candidates
     candidates_L4 = [sample_layer_L4(prob_layer_L4) for _ in range(population_size)]
@@ -222,8 +229,8 @@ def sample_layer_L1(prob_matrices):
         
         selection_results.append(binary_code)
     
-    return [[1],[1]]
-    # return selection_results
+    # return [[1],[1]]
+    return selection_results
 
 def sample_layer_L2(prob_matrices_L2):
     """
@@ -252,8 +259,8 @@ def sample_layer_L2(prob_matrices_L2):
 
         break_edge_codes.append(binary_string)
     
-    return [[0,0,0,0],[0,1,0]]
-    # return break_edge_codes
+    # return [[0,0,0,0],[0,1,0]]
+    return break_edge_codes
 
 def sample_layer_L3(prob_matrices_L3):
     """
@@ -263,7 +270,6 @@ def sample_layer_L3(prob_matrices_L3):
     """
     # path_selection_results: Stores sampled nodes for all cycles and their steps
     path_selection_results = []
-    
     # Iterate through each cycle component
     for cycle_idx in range(len(prob_matrices_L3)):
         cycle_path_samples = []
@@ -275,13 +281,15 @@ def sample_layer_L3(prob_matrices_L3):
             # Identify if the current step is a direct transition (indicated by [999,999])
             # num_substeps represents the number of intermediate points in this transition
             num_substeps = len(prob_matrices_L3[cycle_idx][step_idx])
-            
             for substep_matrix in prob_matrices_L3[cycle_idx][step_idx]:
                 # binary_node: The sampled binary string for an intermediate state
                 binary_node = []
                 
-                if num_substeps == 1:
-                    # Identifier 999 indicates a direct 1-bit Hamming distance (no intermediate node needed)
+                sub = prob_matrices_L3[cycle_idx][step_idx][0]   # 可能是 array([[0.5,0.5]]) 或 [999, 999]
+                val = np.asarray(sub).flatten()[0]
+                    
+                if val==999:
+                # Identifier 999 indicates a direct 1-bit Hamming distance (no intermediate node needed)
                     step_node_codes.append(999)
                 else:
                     # Perform bit-wise stochastic sampling for the intermediate node
@@ -301,55 +309,6 @@ def sample_layer_L3(prob_matrices_L3):
             
         # Append the complete cycle path to the global result list
         path_selection_results.append(cycle_path_samples)
-
-    return path_selection_results
-def sample_layer_L3_new(prob_matrices_L3):
-    """
-    Sample from Layer 3 probability matrices to determine intermediate path nodes.
-    This handles multi-bit Hamming distance transitions by selecting specific nodes
-    within the Boolean hypercube for each transformation step.
-    """
-    # path_selection_results: Stores sampled nodes for all cycles and their steps
-    path_selection_results = []
-    
-    # Iterate through each cycle component
-    for cycle_idx in range(len(prob_matrices_L3)):
-        cycle_path_samples = []
-        
-        # Iterate through each transition step (swap/transformation) within the cycle
-        for step_idx in range(len(prob_matrices_L3[cycle_idx])):
-            step_node_codes = []
-            
-            # Identify if the current step is a direct transition (indicated by [999,999])
-            # num_substeps represents the number of intermediate points in this transition
-            num_substeps = len(prob_matrices_L3[cycle_idx][step_idx])
-            
-            for substep_matrix in prob_matrices_L3[cycle_idx][step_idx]:
-                # binary_node: The sampled binary string for an intermediate state
-                binary_node = []
-                
-                if num_substeps == 1:
-                    # Identifier 999 indicates a direct 1-bit Hamming distance (no intermediate node needed)
-                    step_node_codes.append(999)
-                else:
-                    # Perform bit-wise stochastic sampling for the intermediate node
-                    for bit_prob in substep_matrix:
-                        random_threshold = np.random.rand(1)
-                        
-                        if bit_prob[0] < random_threshold:
-                            binary_node.append(1)
-                        else:
-                            binary_node.append(0)
-                    
-                    # Store the sampled binary representation for this specific node
-                    step_node_codes.append(binary_node)
-            
-            # Append the collection of nodes for this step to the cycle's path
-            cycle_path_samples.append(step_node_codes)
-            
-        # Append the complete cycle path to the global result list
-        path_selection_results.append(cycle_path_samples)
-
     return path_selection_results
 
 def sample_layer_L4(prob_matrices_L4):

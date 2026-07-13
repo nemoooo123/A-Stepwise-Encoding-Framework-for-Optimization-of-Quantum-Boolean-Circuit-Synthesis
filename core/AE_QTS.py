@@ -12,6 +12,7 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  base_trajectory, 
                                  experiment_id, 
                                  encoding_table, 
+                                 path_table,
                                  qindividuals1, 
                                  qindividuals2, 
                                  qindividuals3, 
@@ -42,7 +43,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 2: Decoding and Circuit Synthesis
         # Convert quantum neighbors into concrete reversible circuit solutions
         circuit_solutions = decode_and_synthesize(
-            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+            nbr1, nbr2, nbr3, nbr4, encoding_table, path_table, num_bits, num_neighbors, base_trajectory
         )
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
@@ -72,8 +73,7 @@ def AE_QTS_run_single_experiment(max_iterations,
             global_best_unique_count = local_best_unique_count
             global_best_circuit = local_best_circuit
         # Step 6: Integrity Verification
-        # Check if the synthesized circuits fulfill the logic requirements for the target output
-        # valid_count = sum(verify_circuit_logic(sol, num_bits, target_output) for sol in circuit_solutions)
+        # valid_count = sum(verify_circuit_logic(sol[0], num_bits, target_output) for sol in circuit_solutions)
         
         # if valid_count != num_neighbors:
         #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")

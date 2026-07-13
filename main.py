@@ -71,7 +71,7 @@ def main():
 
         if algo_choice == 1:  # AE-QTS (Amplitude-Ensemble Quantum-Inspired Tabu Search)
             # Step 2: Initialize Quantum Individuals and Encoding Tables
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
+            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, path_table, trajectory_base = build_encode(cycles)
             
             # Step 3: Run the core search algorithm for a single experiment
             fitness_history_matrix, unique_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
@@ -82,6 +82,7 @@ def main():
                 base_trajectory = trajectory_base,
                 experiment_id = r,
                 encoding_table = encoding_table,
+                path_table = path_table,
                 qindividuals1 = qindividuals1,
                 qindividuals2 = qindividuals2,
                 qindividuals3 = qindividuals3,
@@ -164,7 +165,7 @@ def main():
             )
         elif algo_choice == 5: # DE (Differential Evolution - A population-based stochastic global optimizer)
             # Step 1: Initialize Encoding Fram
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, path_table, trajectory_base = build_encode(cycles)
             
             # Note: DE_run_single_experiment's own "fitness_history_matrix" param tracks the
             # unique-gate-count objective it searches on, while its "unique_history_matrix" param
@@ -178,6 +179,7 @@ def main():
                 base_trajectory = trajectory_base,
                 experiment_id = r,
                 encoding_table = encoding_table,
+                path_table = path_table,
                 pop_matrix1 = pop_matrix1,
                 pop_matrix2 = pop_matrix2,
                 pop_matrix3 = pop_matrix3,

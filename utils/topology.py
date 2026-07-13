@@ -5,7 +5,7 @@ import time
 from utils.init_state import hamming_distance
 
 
-def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories):
+def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, path_table, num_units, pop_size, trajectories):
     """
     Decodes hierarchical binary samples into decimal values and synthesizes 
     quantum circuit routes for the entire population.
@@ -33,14 +33,66 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
 
         # Layer 3: Intermediate node decoding (Handling special 999 bypass flag)
         decoded_l3 = []
-        for cycle in pop_l3[i]:
+        for idx, cycle in enumerate(pop_l3[i]):
+            # print("cycle",cycle)
+            # print("pa",path_table[idx])#路徑調好 要和cycle 第一二層編碼 取% 然後後面要repair 不能相同
             cycle_steps = []
-            for step in cycle:
+            for p_idx, step in enumerate(cycle):
                 if step[0] == 999:
                     cycle_steps.append([999])
                 else:
                     # Convert each node bit-string to a decimal index
-                    cycle_steps.append([int(''.join(map(str, node)), 2) for node in step])
+                    cycle_steps_probs=[]
+                    limit = path_table[idx][p_idx]
+                    for node in step:#一次
+                        tmp = int(''.join(map(str, node)), 2)
+                        cycle_steps_probs.append(tmp % limit if tmp >= limit else tmp)
+                    # 1. 統計每個數字出現在哪些索引位置
+                    # 例如：{1: [0, 1]} 代表數字 1 出現在索引 0 和 1
+                    val_to_indices = {}
+                    for x_idx, val in enumerate(cycle_steps_probs):
+                        if val not in val_to_indices:
+                            val_to_indices[val] = []
+                        val_to_indices[val].append(x_idx)
+
+                    # 2. 找出哪些索引是需要被修復的
+                    duplicate_indices = []
+                    seen_vals = set()
+
+                    for val, indices in val_to_indices.items():
+                        if len(indices) > 1:
+                            # 【核心改動】從所有重複的位置中，隨機選一個位置「保留」
+                            keep_idx = random.choice(indices)
+                            seen_vals.add(val)
+                            
+                            # 除了保留的那一個，其他位置都要被修復
+                            for j_idx in indices:
+                                if j_idx != keep_idx:
+                                    duplicate_indices.append(j_idx)
+                        else:
+                            # 沒有重複的數字，直接保留
+                            seen_vals.add(val)
+
+                    # 3. 開始修復被隨機挑選出來的重複位置
+                    if duplicate_indices:
+                        # 計算可用數字池 (0 ~ limit-1 扣掉已經保留的數字)
+                        all_possible_states = set(range(limit))
+                        available_states = list(all_possible_states - seen_vals)
+                        
+                        # 打亂可用數字池，確保修復時也是隨機填入
+                        random.shuffle(available_states)
+                        
+                        # 逐一修復
+                        for dup_idx in duplicate_indices:
+                            if available_states:
+                                new_val = available_states.pop()  # 隨機抽一個可用數字
+                                cycle_steps_probs[dup_idx] = new_val
+
+                    cycle_steps.append(cycle_steps_probs)
+
+                    # cycle_steps.append([int(''.join(map(str, node)), 2) for node in step])
+                    # print("cycle_steps正解",cycle_steps)
+                    # print("正解",[int(''.join(map(str, node)), 2) for node in step])
             decoded_l3.append(cycle_steps)
         
         # Synthesis: Transform decoded parameters into the final circuit structure
@@ -52,12 +104,10 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
         gate_set = set(tuple(gate) for gate in individual_solution)
         # duplicate_count = len(individual_solution) - len(gate_set)
-        # print(f"individual {i}: total={len(individual_solution)} unique={len(gate_set)} duplicates={duplicate_count}")
 
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
         # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
         circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set)))
-        # print("circuit_solutions",circuit_solutions)
         
     return circuit_solutions
 
@@ -86,11 +136,11 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
     
     final_paths = []
     final_ops = []
-
     # Convert optimized node priorities into concrete state-space trajectories and operation sequences.
     for ind, cycle_idx in enumerate(sorted_order):
         # Retrieve the entry pointer for the current cycle sequence.
         step_ptr = entry_points[cycle_idx]
+        
         total_steps = len(mid_node_matrix[cycle_idx])
         
         # Edge case handling for degenerate cycles (single-transition cycles) to maintain sequence integrity.
@@ -158,7 +208,7 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
     
     circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
-
+    
     return circuit
 
 def initialize_solution_layer(data_structure):
@@ -583,15 +633,20 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
     Constructs the intermediate state sequence between two nodes.
     Flips bits based on the optimized priority sequence (path_priorities).
     """
-    state_route = []
-    
+    # print("step_idx",step_idx) #目前trajectory位置
+    # print("path_priorities",path_priorities)
+    # print("trajectory",trajectory)
+    state_route = [] 
     # Check for non-reserved priority set
     if path_priorities[0] != 999:
         # Step 1: Sort indices based on priority values to determine flip order
         # priority_map (formerly pp) dictates which bit flips first
-        sorted_elements = sorted(enumerate(path_priorities), key=lambda x: x[1], reverse=True)
-        priority_map = [idx for idx, val in sorted_elements]
         
+        # sorted_elements = sorted(enumerate(path_priorities), key=lambda x: x[1], reverse=True)
+        # print("sorted_elements",sorted_elements)
+        # priority_map = [idx for idx, val in sorted_elements]
+        # print("priority_map",priority_map)
+        #起點 終點 要保留
         start_node = trajectory[step_idx]
         end_node = trajectory[step_idx + 1]
         state_route.append(start_node)
@@ -599,15 +654,17 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
         # Step 2: Convert to bit arrays for manipulation
         bit_array = [int(b) for b in bin(start_node)[2:].zfill(num_units)]
         target_array = [int(b) for b in bin(end_node)[2:].zfill(num_units)]
-        
+        # print("bit_array",bit_array)
+        # print("target_array",target_array)
         # Step 3: Identify the bit locations that require flipping (Hamming indices)
         diff_locations = []
         for i in range(len(bit_array)):
             if bit_array[i] != target_array[i]:
                 diff_locations.append(i)
-        
+        # print("diff_locations",diff_locations)
         # Step 4: Execute bit-flips following the optimized priority map
-        for flip_idx in priority_map:
+        for flip_idx in path_priorities:
+        # for flip_idx in priority_map:
             target_bit_pos = diff_locations[flip_idx]
             # Perform bit-flip: 0 -> 1 or 1 -> 0
             bit_array[target_bit_pos] =abs(1 - bit_array[target_bit_pos])
@@ -616,13 +673,14 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
             binary_str = ''.join(map(str, bit_array))
             decimal_state = int(binary_str, 2)
             state_route.append(decimal_state)
+        state_route.append(end_node)
+        # print("state_route",state_route)
 
     else:
         # BYPASS CASE: Direct transition between start and end node
         start_node = trajectory[step_idx]
         end_node = trajectory[step_idx + 1]
         state_route.extend([start_node, end_node])
-
     return state_route
 
 def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, num_bits):
@@ -731,6 +789,7 @@ def verify_circuit_logic(optimized_gates, num_bits, target_truth_table):
         current_bits = [int(b) for b in bin(input_state)[2:].zfill(num_bits)]
         
         # Step 2: Pass the input through each logic gate in the sequence
+        
         for gate in optimized_gates:
             target_pos = -1
             is_control_satisfied = True

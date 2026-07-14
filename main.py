@@ -40,7 +40,7 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 100
+    num_experiments = 10
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
@@ -50,6 +50,8 @@ def main():
     # Using float('inf') as default to easily track minimization progress
     fitness_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
     unique_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
+    a1_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
+    a2_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -67,6 +69,8 @@ def main():
             best_scores_per_experiment.append(0)
             fitness_history_matrix[r, :] = 0
             unique_history_matrix[r, :] = 0
+            a1_history_matrix[r, :] = 0
+            a2_history_matrix[r, :] = 0
             continue
 
         if algo_choice == 1:  # AE-QTS (Amplitude-Ensemble Quantum-Inspired Tabu Search)
@@ -74,7 +78,7 @@ def main():
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
             
             # Step 3: Run the core search algorithm for a single experiment
-            fitness_history_matrix, unique_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -88,6 +92,8 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 unique_history_matrix = unique_history_matrix,
+                a1_history_matrix = a1_history_matrix,
+                a2_history_matrix = a2_history_matrix,
                 target_output = target_output,
                 delta_theta = 0.01
             )
@@ -170,7 +176,7 @@ def main():
             # unique-gate-count objective it searches on, while its "unique_history_matrix" param
             # carries the paired total gate count. Swap on unpack so main.py's fitness_history_matrix
             # always means "total" and unique_history_matrix always means "unique", matching AE-QTS.
-            fitness_history_matrix, unique_history_matrix, final_best_gate, best_circuit_this_run = DE_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, final_best_gate, best_circuit_this_run = DE_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -184,6 +190,8 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 unique_history_matrix = unique_history_matrix,
+                a1_history_matrix = a1_history_matrix,
+                a2_history_matrix = a2_history_matrix,
                 target_output = target_output,
                 CR = 0.05,
             )
@@ -291,6 +299,12 @@ def main():
     if has_unique_data:
         average_unique_curve = np.mean(unique_history_matrix, axis=0)
 
+    # a1/a2 counts are only populated for AE-QTS and DE
+    has_a1_a2_data = algo_choice in (1, 5)
+    if has_a1_a2_data:
+        average_a1_curve = np.mean(a1_history_matrix, axis=0)
+        average_a2_curve = np.mean(a2_history_matrix, axis=0)
+
 
     global_min_gate = min(best_scores_per_experiment)
     best_exp_index = best_scores_per_experiment.index(global_min_gate) # Identify the most successful trial
@@ -324,6 +338,9 @@ def main():
     plt.plot(iterations, average_convergence_curve, label='avg total gate count')
     if has_unique_data:
         plt.plot(iterations, average_unique_curve, label='avg unique gate count')
+    if has_a1_a2_data:
+        plt.plot(iterations, average_a1_curve, label='avg a1 count')
+        plt.plot(iterations, average_a2_curve, label='avg a2 count')
     plt.xlabel('Iteration')
     plt.ylabel('Gate Count')
     plt.title(f'{algo_name} Averaged Convergence Curve ({num_experiments} experiments)')

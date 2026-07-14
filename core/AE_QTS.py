@@ -19,6 +19,8 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  qindividuals4,
                                  fitness_history_matrix,
                                  unique_history_matrix,
+                                 a1_history_matrix,
+                                 a2_history_matrix,
                                  target_output,
                                  delta_theta):
     """
@@ -29,6 +31,8 @@ def AE_QTS_run_single_experiment(max_iterations,
     current_iter = 0
     global_best_gate_count = float('inf')
     global_best_unique_count = float('inf')
+    global_best_a1_count = float('inf')
+    global_best_a2_count = float('inf')
     global_best_circuit = []
 
     while current_iter < max_iterations:
@@ -48,22 +52,24 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        solution_metrics = [(sol_tuple[2], sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        solution_metrics = [(sol_tuple[2], sol_tuple[1],sol_tuple[3],sol_tuple[4], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
         #-----
-        local_best_idx = sorted_metrics[0][2]
+        local_best_idx = sorted_metrics[0][4]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
         local_best_unique_count = circuit_solutions[local_best_idx][2]
+        local_best_a1_count = circuit_solutions[local_best_idx][3]
+        local_best_a2_count = circuit_solutions[local_best_idx][4]
         local_best_circuit = circuit_solutions[local_best_idx][0]
         # Step 4: Quantum Population Update (Angle Adjustment)
         # Update the probability amplitudes of qindividuals based on neighbor performance
         updateQ(
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
             num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-            [m[2] for m in sorted_metrics], num_cycles, delta_theta
+            [m[4] for m in sorted_metrics], num_cycles, delta_theta
         )
 
         # Step 5: Global Best Tracking
@@ -72,6 +78,8 @@ def AE_QTS_run_single_experiment(max_iterations,
             global_best_gate_count = local_best_gate_count
             global_best_unique_count = local_best_unique_count
             global_best_circuit = local_best_circuit
+            global_best_a1_count = local_best_a1_count
+            global_best_a2_count = local_best_a2_count
         # Step 6: Integrity Verification
         # valid_count = sum(verify_circuit_logic(sol[0], num_bits, target_output) for sol in circuit_solutions)
         
@@ -82,9 +90,11 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Record the current best gate count into the fitness history matrix (used for np.mean later)
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate_count
         unique_history_matrix[experiment_id][current_iter - 1] = global_best_unique_count
-        
+        a1_history_matrix[experiment_id][current_iter - 1] = global_best_a1_count
+        a2_history_matrix[experiment_id][current_iter - 1] = global_best_a2_count
 
-    return fitness_history_matrix, unique_history_matrix, global_best_gate_count, global_best_circuit
+
+    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                num_neighbors, nbr1, nbr2, nbr3, nbr4, 

@@ -98,7 +98,7 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, path_ta
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
+        individual_solution,a1,a2 = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
                                           pop_l4[i], num_units, trajectories)
 
         # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
@@ -107,7 +107,7 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, path_ta
 
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
         # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
-        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set)))
+        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set),a1,a2))
         
     return circuit_solutions
 
@@ -208,8 +208,23 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
     
     circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
+    #0714 
+    point=0
+    path=0
+    for idx in range(len(final_paths)-1):
+        
+        a=final_paths[idx]
+        b=final_paths[idx+1]
+
+        c=final_ops[idx]
+        d=final_ops[idx+1]
+
+        if a[-1]==b[0] and a[-2]==b[1]:
+            point+=1
+            if c[-1]==0 and d[0]==0:
+                path+=1
     
-    return circuit
+    return circuit, point, path
 
 def initialize_solution_layer(data_structure):
     """

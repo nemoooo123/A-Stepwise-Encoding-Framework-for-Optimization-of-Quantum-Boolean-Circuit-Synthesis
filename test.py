@@ -20,9 +20,10 @@ def draw_circuit(circuit, radius=0.12, save_path=None):
     fig, ax = plt.subplots(figsize=(max(4, n_gates * 1.0), max(2, n_lines * 0.8)))
 
     # Horizontal wires, one per qubit line. y = 0 is the top line, increasing downward.
+    wire_margin = 0.5
     for row in range(n_lines):
-        ax.plot([0, n_gates - 1], [row, row], color="black", linewidth=1, zorder=1)
-        ax.text(-0.5, row, f"q{row}", ha="right", va="center", fontsize=11)
+        ax.plot([-wire_margin, n_gates - 1 + wire_margin], [row, row], color="black", linewidth=1, zorder=1)
+        ax.text(-wire_margin - 0.3, row, f"q{row}", ha="right", va="center", fontsize=11)
 
     # Each column is one multi-controlled gate: every line participates
     # (as a 0/1 control or the 3 target), so the connector spans the full column.
@@ -46,7 +47,7 @@ def draw_circuit(circuit, radius=0.12, save_path=None):
             else:
                 raise ValueError(f"Unknown gate value {value} at column {col}, row {row}")
 
-    ax.set_xlim(-1, n_gates)
+    ax.set_xlim(-wire_margin - 1, n_gates - 1 + wire_margin + 0.5)
     ax.set_ylim(bottom=n_lines - 0.5, top=-0.5)  # row 0 at the top
     ax.set_aspect("equal")
     ax.axis("off")
@@ -61,8 +62,13 @@ if __name__ == "__main__":
     # 3-qubit example circuit
     circuit = [
         [0, 0, 3],
-        [0, 0, 3],
-        [0, 1, 3],
+        [1, 0, 3],
+        [0, 3, 1],
+        [0, 3, 0],
+        [3, 1, 0],
+        [0, 3, 0],
+        [0, 3, 0],
+        [3, 0, 1],
         [0, 3, 0],
         [3, 1, 1],
     ]

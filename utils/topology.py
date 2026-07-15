@@ -45,13 +45,12 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         
         
         
-        # a=[1, 1]
-        # b=[4, 2]
-        # c=[[[0, 1], [999], [0, 1], [0, 2, 3, 3], [1, 1], [1, 1], [2, 3, 2], [1, 1], [0, 1, 3], [3, 1, 3]], [[0, 1], [3, 3, 3], [3, 2, 3], [999], [3, 3, 1], [1, 1]]]
-        # d=[[[1, 0], [0], [0, 1], [1, 1, 0, 1, 0, 0], [1, 0], [1, 0], [0, 0, 1, 1], [1, 0], [0, 1, 1, 0], [0, 0, 1, 1]], [[0, 1], [1, 0, 1, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
-        
-        # individual_solution,a1,a2 = synthesize_route(decoded_l1, decoded_l2, c,
-        #                                   pop_l4[i], num_units, trajectories)
+        # a=[1, 1] 
+        # b=[9, 2] 
+        # c=[[[0, 1], [999], [0, 1], [3, 2, 3, 2], [0, 1], [0, 1], [3, 2, 1], [0, 1], [1, 3, 3], [3, 3, 1]], [[0, 1], [3, 3, 1], [3, 2, 3], [999], [3, 3, 3], [1, 1]]] 
+        # d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [0, 0, 1, 1], [1, 0], [1, 1, 0, 0], [1, 1, 0, 0]], [[0, 1], [1, 1, 0, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
+        # individual_solution,a1,a2 = synthesize_route(a, b, decoded_l3,
+        #                                   d, num_units, trajectories)
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         

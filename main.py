@@ -338,9 +338,9 @@ def main():
     plt.plot(iterations, average_convergence_curve, label='avg total gate count')
     if has_unique_data:
         plt.plot(iterations, average_unique_curve, label='avg unique gate count')
-    if has_a1_a2_data:
-        plt.plot(iterations, average_a1_curve, label='avg a1 count')
-        plt.plot(iterations, average_a2_curve, label='avg a2 count')
+    # if has_a1_a2_data:
+    #     plt.plot(iterations, average_a1_curve, label='avg a1 count')
+    #     plt.plot(iterations, average_a2_curve, label='avg a2 count')
     plt.xlabel('Iteration')
     plt.ylabel('Gate Count')
     plt.title(f'{algo_name} Averaged Convergence Curve ({num_experiments} experiments)')

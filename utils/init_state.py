@@ -221,7 +221,7 @@ def sample_layer_L1(prob_matrices):
                 binary_code.append(0)
         
         selection_results.append(binary_code)
-    
+    # return [[1], [1]]
     return selection_results
 
 def sample_layer_L2(prob_matrices_L2):
@@ -250,7 +250,7 @@ def sample_layer_L2(prob_matrices_L2):
                 binary_string.append(0)
 
         break_edge_codes.append(binary_string)
-    
+    # return [[0, 0, 0, 0], [0, 1, 0]]
     return break_edge_codes
 
 def sample_layer_L3(prob_matrices_L3):
@@ -345,6 +345,7 @@ def sample_layer_L4(prob_matrices_L4):
         
         # Collect the validated sequences for this cycle
         sequence_selection_results.append(cycle_sequence_samples)
+    # return [[[0, 1], [999], [0, 1], [3, 0, 3, 1], [1, 0], [1, 1], [1, 3, 1], [1, 1], [1, 1, 3], [3, 3, 3]], [[0, 1], [1, 3, 3], [3, 0, 1], [999], [3, 3, 3], [1, 1]]]
     
     return sequence_selection_results
 

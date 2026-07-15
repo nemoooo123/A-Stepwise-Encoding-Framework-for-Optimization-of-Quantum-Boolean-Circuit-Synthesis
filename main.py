@@ -40,7 +40,7 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 10
+    num_experiments = 30
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
@@ -365,37 +365,46 @@ def main():
         f.write("========================================\n")
 
     # --- Generate Detailed Excel Data (Pandas) ---
-    # This file stores the full convergence matrix for statistical plotting and verification
-    
-    try:
-        # 1. Construct the basic Fitness DataFrame (Rows: Trials, Columns: Generations)
-        df = pd.DataFrame(fitness_history_matrix)
+    # This file stores the full convergence matrices (total/unique gate counts, a1, a2) for statistical plotting and verification
+
+    def build_history_df(matrix):
+        # 1. Construct the basic DataFrame (Rows: Trials, Columns: Generations)
+        df = pd.DataFrame(matrix)
         df.index = [f"Trial_{i+1}" for i in range(df.shape[0])]
         df.columns = [f"Gen_{i+1}" for i in range(df.shape[1])]
-        
+
         # 2. Append the Execution Time column
         # Ensure 'execution_times' is a list of floats/ints with the same length as num_experiments
         df['Execution_Time(s)'] = execution_times
-        
+
         # 3. Calculate statistical rows (Mean and Std Deviation)
         # CRITICAL: We only calculate stats for 'Gen_x' columns, excluding 'Execution_Time(s)'
-        fitness_cols = [c for c in df.columns if c.startswith('Gen_')]
-        
+        gen_cols = [c for c in df.columns if c.startswith('Gen_')]
+
         # Create a temporary view for calculation
-        stats_view = df[fitness_cols]
-        
+        stats_view = df[gen_cols]
+
         # Append Average and Std Dev rows
         df.loc['Average_Convergence'] = stats_view.mean()
         df.loc['Std_Deviation'] = stats_view.std()
-        
+
         # 4. Manually fill the Execution Time average for the summary row
         # Calculate the mean execution time across all successful trials
-        trial_execution_times = df['Execution_Time(s)'].iloc[:-2] 
+        trial_execution_times = df['Execution_Time(s)'].iloc[:-2]
         df.at['Average_Convergence', 'Execution_Time(s)'] = trial_execution_times.mean()
-        
-        # 5. EXPORT TO FILE (Make sure this line is present!)
-        df.to_excel(xlsx_path)
-        
+        return df
+
+    df = build_history_df(fitness_history_matrix)
+    try:
+        # EXPORT TO FILE: one sheet per tracked metric
+        with pd.ExcelWriter(xlsx_path) as writer:
+            df.to_excel(writer, sheet_name='Total_Gate_Count')
+            if has_unique_data:
+                build_history_df(unique_history_matrix).to_excel(writer, sheet_name='Unique_Gate_Count')
+            if has_a1_a2_data:
+                build_history_df(a1_history_matrix).to_excel(writer, sheet_name='A1_Count')
+                build_history_df(a2_history_matrix).to_excel(writer, sheet_name='A2_Count')
+
         # Console Feedback
         print(f"\n[System] Summary report saved to: {txt_path}")
         print(f"[System] Full convergence history with execution times saved to: {xlsx_path}")

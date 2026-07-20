@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import time
 import pandas as pd
 import os
@@ -39,8 +40,13 @@ def main():
     
     print(f"\nTarget Truth Table: {target_output}")
 
+    # Fix the random seed so experiments are reproducible across runs
+    random_seed = 42
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+
     # Experimental Configuration
-    num_experiments = 30
+    num_experiments = 1
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     

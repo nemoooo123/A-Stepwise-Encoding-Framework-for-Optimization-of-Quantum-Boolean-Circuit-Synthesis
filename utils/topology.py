@@ -95,6 +95,12 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, path_ta
                     # print("正解",[int(''.join(map(str, node)), 2) for node in step])
             decoded_l3.append(cycle_steps)
         
+
+        # a=[1, 1] 
+        # b=[4, 2] 
+        # c=[[[1], [999], [1], [1, 2, 3], [1], [1], [0, 1], [1], [1, 0], [2, 0]], [[1], [2, 0], [0, 2], [999], [0, 1], [0]], [[1], [999], [1], [3, 2, 3], [1], [1], [3, 1], [1], [1, 3], [3, 0]], [[1], [3, 3], [0, 2], [999], [3, 1], [0]]] 
+        # d=[[[1, 0], [0], [0, 1], [1, 1, 0, 1, 0, 0], [1, 0], [0, 1], [1, 1, 0, 0], [0, 1], [1, 1, 0, 0], [0, 0, 1, 1]], [[0, 1], [1, 0, 0, 1], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
+
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         

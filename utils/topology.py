@@ -224,7 +224,7 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
             point+=1
             if c[-1]==0 and d[0]==0:
                 path+=1
-                # extra_point+=2
+                extra_point+=2
             else:extra_point+=1
     
     return circuit, point, path, extra_point

@@ -57,7 +57,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
         ##修改過囉
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
@@ -136,8 +136,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                 w_val = worst_sol1[i][j]
                 if b_val != w_val:
                     # Increment probability of the 'best' decision, decrement the 'worst'
-                    qindividuals1[i][j][b_val] += delta_theta/(t+1)
-                    qindividuals1[i][j][w_val] -= delta_theta/(t+1)
+                    qindividuals1[i][j][b_val] += delta_theta
+                    qindividuals1[i][j][w_val] -= delta_theta
                     
                     # Boundary Correction: Ensure probabilities stay within [0, 1]
                     if qindividuals1[i][j][w_val] <= 0:
@@ -151,8 +151,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
         for i in range(len(qindividuals2)):
             for j in range(len(qindividuals2[i])):
                 if best_sol2[i][j] != worst_sol2[i][j]:
-                    qindividuals2[i][j][best_sol2[i][j]] += delta_theta/(t+1)
-                    qindividuals2[i][j][worst_sol2[i][j]] -= delta_theta/(t+1)
+                    qindividuals2[i][j][best_sol2[i][j]] += delta_theta
+                    qindividuals2[i][j][worst_sol2[i][j]] -= delta_theta
                     if qindividuals2[i][j][worst_sol2[i][j]] <= 0:
                         qindividuals2[i][j][best_sol2[i][j]] = 1.0
                         qindividuals2[i][j][worst_sol2[i][j]] = 0.0
@@ -170,8 +170,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                             b_bit = best_sol3[i][j][k][l]
                             w_bit = worst_sol3[i][j][k][l]
                             if b_bit != w_bit:
-                                qindividuals3[i][j][k][l][b_bit] += delta_theta/(t+1)
-                                qindividuals3[i][j][k][l][w_bit] -= delta_theta/(t+1)
+                                qindividuals3[i][j][k][l][b_bit] += delta_theta
+                                qindividuals3[i][j][k][l][w_bit] -= delta_theta
                                 if qindividuals3[i][j][k][l][w_bit] <= 0:
                                     qindividuals3[i][j][k][l][b_bit] = 1.0
                                     qindividuals3[i][j][k][l][w_bit] = 0.0
@@ -188,8 +188,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                         b_gate = best_sol4[i][j][k]
                         w_gate = worst_sol4[i][j][k]
                         if b_gate != w_gate:
-                            qindividuals4[i][j][k][b_gate] += delta_theta/(t+1)
-                            qindividuals4[i][j][k][w_gate] -= delta_theta/(t+1)
+                            qindividuals4[i][j][k][b_gate] += delta_theta
+                            qindividuals4[i][j][k][w_gate] -= delta_theta
                             if qindividuals4[i][j][k][w_gate] <= 0:
                                 qindividuals4[i][j][k][b_gate] = 1.0
                                 qindividuals4[i][j][k][w_gate] = 0.0

@@ -54,7 +54,7 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution,a1,a2 = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
+        individual_solution,a1,a2, a3 = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
                                           pop_l4[i], num_units, trajectories)
 
         # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
@@ -64,7 +64,7 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
 
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
         # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
-        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set),a1,a2))
+        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set),a1,a2, len(individual_solution)-a3))
         
         
     return circuit_solutions
@@ -169,6 +169,7 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
     #0714 
     point=0
     path=0
+    extra_point=0
     for idx in range(len(final_paths)-1):
         a=final_paths[idx]
         b=final_paths[idx+1]
@@ -180,8 +181,10 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
             point+=1
             if c[-1]==0 and d[0]==0:
                 path+=1
+                extra_point+=2
+            else:extra_point+=1
     
-    return circuit, point, path
+    return circuit, point, path, extra_point
 
 def initialize_solution_layer(data_structure):
     """

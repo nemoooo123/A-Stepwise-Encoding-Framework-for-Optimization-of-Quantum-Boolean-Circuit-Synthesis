@@ -52,24 +52,33 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        solution_metrics = [(sol_tuple[2], sol_tuple[1],sol_tuple[3],sol_tuple[4], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        solution_metrics = [(sol_tuple[2], sol_tuple[1],sol_tuple[3],sol_tuple[4],sol_tuple[5], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
+        ##修改過囉
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
+        sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
         #-----
-        local_best_idx = sorted_metrics[0][4]
+        local_best_idx = sorted_metrics_getbest[0][5]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
         local_best_unique_count = circuit_solutions[local_best_idx][2]
         local_best_a1_count = circuit_solutions[local_best_idx][3]
         local_best_a2_count = circuit_solutions[local_best_idx][4]
         local_best_circuit = circuit_solutions[local_best_idx][0]
+        # #-----
+        # local_best_idx = sorted_metrics[0][4]
+        # local_best_gate_count = circuit_solutions[local_best_idx][1]
+        # local_best_unique_count = circuit_solutions[local_best_idx][2]
+        # local_best_a1_count = circuit_solutions[local_best_idx][3]
+        # local_best_a2_count = circuit_solutions[local_best_idx][4]
+        # local_best_circuit = circuit_solutions[local_best_idx][0]
         # Step 4: Quantum Population Update (Angle Adjustment)
         # Update the probability amplitudes of qindividuals based on neighbor performance
         updateQ(
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
             num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-            [m[4] for m in sorted_metrics], num_cycles, delta_theta
+            [m[5] for m in sorted_metrics], num_cycles, delta_theta
         )
 
         # Step 5: Global Best Tracking

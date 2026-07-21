@@ -46,7 +46,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 2: Decoding and Circuit Synthesis
         # Convert quantum neighbors into concrete reversible circuit solutions
         circuit_solutions = decode_and_synthesize(
-            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+            nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory,current_iter
         )
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
@@ -56,7 +56,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
@@ -170,8 +170,8 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                             b_bit = best_sol3[i][j][k][l]
                             w_bit = worst_sol3[i][j][k][l]
                             if b_bit != w_bit:
-                                qindividuals3[i][j][k][l][b_bit] += delta_theta/(t+1)
-                                qindividuals3[i][j][k][l][w_bit] -= delta_theta/(t+1)
+                                qindividuals3[i][j][k][l][b_bit] += (delta_theta/(t+1))
+                                qindividuals3[i][j][k][l][w_bit] -= (delta_theta/(t+1))
                                 if qindividuals3[i][j][k][l][w_bit] <= 0:
                                     qindividuals3[i][j][k][l][b_bit] = 1.0
                                     qindividuals3[i][j][k][l][w_bit] = 0.0

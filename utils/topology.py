@@ -5,7 +5,7 @@ import time
 from utils.init_state import hamming_distance
 
 
-def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories):
+def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories,current_iter):
     """
     Decodes hierarchical binary samples into decimal values and synthesizes 
     quantum circuit routes for the entire population.
@@ -45,17 +45,23 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         
         
         
+        # a=[1, 1] 
+        # b=[9, 2] 
+        # c=[[[0, 1], [999], [0, 1], [3, 2, 3, 2], [0, 1], [0, 1], [3, 2, 1], [0, 1], [1, 3, 3], [3, 3, 1]], [[0, 1], [3, 3, 1], [3, 2, 3], [999], [3, 3, 3], [1, 1]]] 
+        # d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [0, 0, 1, 1], [1, 0], [1, 1, 0, 0], [1, 1, 0, 0]], [[0, 1], [1, 1, 0, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
         a=[1, 1] 
         b=[9, 2] 
-        c=[[[0, 1], [999], [0, 1], [3, 2, 3, 2], [0, 1], [0, 1], [3, 2, 1], [0, 1], [1, 3, 3], [3, 3, 1]], [[0, 1], [3, 3, 1], [3, 2, 3], [999], [3, 3, 3], [1, 1]]] 
-        d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [0, 0, 1, 1], [1, 0], [1, 1, 0, 0], [1, 1, 0, 0]], [[0, 1], [1, 1, 0, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
-        individual_solution,a1,a2,a3 = synthesize_route(a, b, decoded_l3,
-                                          d, num_units, trajectories)
+        c=[[[1, 1], [999], [0, 1], [3, 1, 3, 3], [1, 1], [1, 1], [3, 3, 1], [0, 1], [3, 2, 1], [3, 0, 3]], [[0, 1], [3, 3, 3], [3, 3, 1], [999], [3, 1, 3], [1, 1]]] 
+        d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [1, 1, 0, 0], [0, 1], [1, 0, 0, 1], [1, 1, 0, 0]], [[0, 1], [1, 0, 1, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
+        
+        individual_solution,a1,a2,a3, bouns_fitness = synthesize_route(decoded_l1, b, decoded_l3,
+                                          pop_l4[i], num_units, trajectories, current_iter)
+        
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        # individual_solution,a1,a2, a3 = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
-        #                                   pop_l4[i], num_units, trajectories)
+        # individual_solution,a1,a2, a3, bouns_fitness = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
+        #                                   pop_l4[i], num_units, trajectories, current_iter)
 
         # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
         gate_set = set(tuple(gate) for gate in individual_solution)
@@ -64,12 +70,12 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
 
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
         # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
-        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set),a1,a2, len(individual_solution)-a3))
+        circuit_solutions.append((individual_solution,len(individual_solution),len(gate_set),a1,a2, len(individual_solution)-a3-bouns_fitness))
         
         
     return circuit_solutions
 
-def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories): 
+def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories,current_iter): 
     """
     Synthesizes the final execution route by resolving cycle sequences and inter-cycle dependencies.
     
@@ -165,7 +171,10 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
 
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
     
-    circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
+    circuit, bouns_fitness = assemble_reversible_circuit(final_paths, final_ops, num_units)
+    if len(circuit)==32 and current_iter>700:
+        print("final_paths",final_paths)
+        print("final_ops",final_ops)
     #0714 
     point=0
     path=0
@@ -184,7 +193,7 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
                 extra_point+=2
             else:extra_point+=1
     
-    return circuit, point, path, extra_point
+    return circuit, point, path, extra_point, bouns_fitness
 
 def initialize_solution_layer(data_structure):
     """
@@ -706,9 +715,11 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
     # Step 2: Map Bit Transitions to Reversible Gates and Apply Optimization
     # Gate Encoding: 0/1 = Control Bits, 3 = Target Bit (Flip)
     optimized_gate_list = []
-    
+    bouns_fitness = 0
+    bouns_tmp = 0
     for transition in raw_step_transitions:
         state_start, state_end = transition[0], transition[1]
+        
         
         # Convert decimal states to binary bit arrays
         bits_start = [int(b) for b in bin(state_start)[2:].zfill(num_bits)]
@@ -729,10 +740,13 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
         else:
             if optimized_gate_list[-1] == current_gate:
                 optimized_gate_list.pop() # Remove redundant gate pair
+                bouns_tmp += 1
             else:
                 optimized_gate_list.append(current_gate)
+                bouns_fitness += bouns_tmp**2
+                bouns_tmp = 0
     
-    return optimized_gate_list
+    return optimized_gate_list, bouns_fitness
 
 def verify_circuit_logic(optimized_gates, num_bits, target_truth_table):
     """

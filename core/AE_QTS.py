@@ -1,6 +1,51 @@
+import math
+import numpy as np
 import matplotlib.pyplot as plt
 from utils.init_state import gen_nbrs
 from utils.topology import decode_and_synthesize,verify_circuit_logic
+
+
+def _shannon_entropy_of_distribution(prob_dist):
+    """
+    Compute the Shannon entropy (base-2) of a single probability distribution.
+    H = -sum(p * log2(p)) for p > 0.
+    """
+    entropy = 0.0
+    for p in prob_dist:
+        if p > 0:
+            entropy -= p * math.log2(p)
+    return entropy
+
+
+def mean_shannon_entropy(quantum_state):
+    """
+    Traverse a hierarchical quantum state (nested probability layers) and return
+    the average Shannon entropy over every valid 2-element probability
+    distribution. [999, 999] sentinel entries are skipped.
+    """
+    entropies = []
+
+    def _collect(node):
+        if isinstance(node, np.ndarray):
+            if node.ndim == 1:
+                if not np.any(node == 999):
+                    entropies.append(_shannon_entropy_of_distribution(node))
+            else:
+                for row in node:
+                    _collect(row)
+        elif isinstance(node, (list, tuple)):
+            # A leaf distribution is a flat list of scalar probabilities.
+            if len(node) > 0 and all(
+                isinstance(x, (int, float, np.integer, np.floating)) for x in node
+            ):
+                if 999 not in node:
+                    entropies.append(_shannon_entropy_of_distribution(node))
+            else:
+                for child in node:
+                    _collect(child)
+
+    _collect(quantum_state)
+    return sum(entropies) / len(entropies) if entropies else 0.0
 
 
 
@@ -21,6 +66,10 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  unique_history_matrix,
                                  a1_history_matrix,
                                  a2_history_matrix,
+                                 entropy1_history_matrix,
+                                 entropy2_history_matrix,
+                                 entropy3_history_matrix,
+                                 entropy4_history_matrix,
                                  target_output,
                                  delta_theta):
     """
@@ -57,7 +106,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
         ##修改過囉
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
@@ -81,6 +130,14 @@ def AE_QTS_run_single_experiment(max_iterations,
             [m[5] for m in sorted_metrics], num_cycles, delta_theta
         )
 
+        # Step 4.5: Quantum State Convergence Measurement
+        # Record the mean Shannon entropy of each updated quantum state for this
+        # iteration. Lower entropy => that state is more converged.
+        entropy1_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals1)
+        entropy2_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals2)
+        entropy3_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals3)
+        entropy4_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals4)
+
         # Step 5: Global Best Tracking
         # Update the overall best solution if a new minimum gate count is discovered
         if global_best_gate_count > local_best_gate_count:
@@ -103,7 +160,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         a2_history_matrix[experiment_id][current_iter - 1] = global_best_a2_count
 
 
-    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, global_best_gate_count, global_best_circuit
+    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                num_neighbors, nbr1, nbr2, nbr3, nbr4, 

@@ -49,19 +49,19 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # b=[9, 2] 
         # c=[[[0, 1], [999], [0, 1], [3, 2, 3, 2], [0, 1], [0, 1], [3, 2, 1], [0, 1], [1, 3, 3], [3, 3, 1]], [[0, 1], [3, 3, 1], [3, 2, 3], [999], [3, 3, 3], [1, 1]]] 
         # d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [0, 0, 1, 1], [1, 0], [1, 1, 0, 0], [1, 1, 0, 0]], [[0, 1], [1, 1, 0, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
-        a=[1, 1] 
-        b=[9, 2] 
-        c=[[[1, 1], [999], [0, 1], [3, 1, 3, 3], [1, 1], [1, 1], [3, 3, 1], [0, 1], [3, 2, 1], [3, 0, 3]], [[0, 1], [3, 3, 3], [3, 3, 1], [999], [3, 1, 3], [1, 1]]] 
-        d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [1, 1, 0, 0], [0, 1], [1, 0, 0, 1], [1, 1, 0, 0]], [[0, 1], [1, 0, 1, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
+        # a=[1, 1] 
+        # b=[9, 2] 
+        # c=[[[1, 1], [999], [0, 1], [3, 1, 3, 3], [1, 1], [1, 1], [3, 3, 1], [0, 1], [3, 2, 1], [3, 0, 3]], [[0, 1], [3, 3, 3], [3, 3, 1], [999], [3, 1, 3], [1, 1]]] 
+        # d=[[[0, 1], [0], [1, 0], [0, 1, 1, 1, 0, 0], [0, 1], [1, 0], [1, 1, 0, 0], [0, 1], [1, 0, 0, 1], [1, 1, 0, 0]], [[0, 1], [1, 0, 1, 0], [1, 1, 0, 0], [0], [0, 0, 1, 1], [1, 0]]]
         
-        individual_solution,a1,a2,a3, bouns_fitness = synthesize_route(decoded_l1, b, decoded_l3,
-                                          pop_l4[i], num_units, trajectories, current_iter)
+        # individual_solution,a1,a2,a3, bouns_fitness = synthesize_route(decoded_l1, b, decoded_l3,
+        #                                   pop_l4[i], num_units, trajectories, current_iter)
         
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        # individual_solution,a1,a2, a3, bouns_fitness = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
-        #                                   pop_l4[i], num_units, trajectories, current_iter)
+        individual_solution,a1,a2, a3, bouns_fitness = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
+                                          pop_l4[i], num_units, trajectories, current_iter)
 
         # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
         gate_set = set(tuple(gate) for gate in individual_solution)
@@ -172,9 +172,9 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
     
     circuit, bouns_fitness = assemble_reversible_circuit(final_paths, final_ops, num_units)
-    if len(circuit)==32 and current_iter>700:
-        print("final_paths",final_paths)
-        print("final_ops",final_ops)
+    # if len(circuit)==32 and current_iter>700:
+    #     print("final_paths",final_paths)
+    #     print("final_ops",final_ops)
     #0714 
     point=0
     path=0

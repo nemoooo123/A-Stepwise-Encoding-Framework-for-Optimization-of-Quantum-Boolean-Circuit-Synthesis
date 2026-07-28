@@ -58,6 +58,11 @@ def main():
     unique_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
     a1_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
     a2_history_matrix = np.full((num_experiments, max_iterations), float('inf'))
+    # Shannon-entropy convergence of the four quantum states (AE-QTS only)
+    entropy1_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    entropy2_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    entropy3_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    entropy4_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -84,7 +89,7 @@ def main():
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
             
             # Step 3: Run the core search algorithm for a single experiment
-            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -100,6 +105,10 @@ def main():
                 unique_history_matrix = unique_history_matrix,
                 a1_history_matrix = a1_history_matrix,
                 a2_history_matrix = a2_history_matrix,
+                entropy1_history_matrix = entropy1_history_matrix,
+                entropy2_history_matrix = entropy2_history_matrix,
+                entropy3_history_matrix = entropy3_history_matrix,
+                entropy4_history_matrix = entropy4_history_matrix,
                 target_output = target_output,
                 delta_theta = 0.01
             )
@@ -356,6 +365,29 @@ def main():
     plt.close()
     print(f"[System] Averaged convergence plot saved to: {avg_plot_path}")
 
+    # --- Generate Averaged Entropy Convergence Plot (AE-QTS only) ---
+    # Four lines in one figure: mean Shannon entropy of each quantum state,
+    # averaged across all experiments, vs iteration.
+    if algo_choice == 1:
+        avg_entropy1 = np.nanmean(entropy1_history_matrix, axis=0)
+        avg_entropy2 = np.nanmean(entropy2_history_matrix, axis=0)
+        avg_entropy3 = np.nanmean(entropy3_history_matrix, axis=0)
+        avg_entropy4 = np.nanmean(entropy4_history_matrix, axis=0)
+
+        plt.figure()
+        plt.plot(iterations, avg_entropy1, label='Q1 (cycle select)')
+        plt.plot(iterations, avg_entropy2, label='Q2 (edge break)')
+        plt.plot(iterations, avg_entropy3, label='Q3 (path nodes)')
+        plt.plot(iterations, avg_entropy4, label='Q4 (seq order)')
+        plt.xlabel('Iteration')
+        plt.ylabel('Mean Shannon Entropy (bits)')
+        plt.title(f'{algo_name} Quantum State Entropy Convergence ({num_experiments} experiments)')
+        plt.legend()
+        entropy_plot_path = os.path.join(save_dir, f"{base_filename}_entropy_convergence.png")
+        plt.savefig(entropy_plot_path)
+        plt.close()
+        print(f"[System] Entropy convergence plot saved to: {entropy_plot_path}")
+
     # --- Generate TXT Summary Report ---
     # This file provides a quick overview of the best results and system performance
     with open(txt_path, "w", encoding="utf-16") as f:
@@ -410,6 +442,11 @@ def main():
             if has_a1_a2_data:
                 build_history_df(a1_history_matrix).to_excel(writer, sheet_name='A1_Count')
                 build_history_df(a2_history_matrix).to_excel(writer, sheet_name='A2_Count')
+            if algo_choice == 1:
+                build_history_df(entropy1_history_matrix).to_excel(writer, sheet_name='Entropy_Q1')
+                build_history_df(entropy2_history_matrix).to_excel(writer, sheet_name='Entropy_Q2')
+                build_history_df(entropy3_history_matrix).to_excel(writer, sheet_name='Entropy_Q3')
+                build_history_df(entropy4_history_matrix).to_excel(writer, sheet_name='Entropy_Q4')
 
         # Console Feedback
         print(f"\n[System] Summary report saved to: {txt_path}")

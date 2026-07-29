@@ -105,7 +105,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
@@ -195,7 +195,7 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                     # Increment probability of the 'best' decision, decrement the 'worst'
                     qindividuals1[i][j][b_val] += delta_theta/(t+1)
                     qindividuals1[i][j][w_val] -= delta_theta/(t+1)
-                    
+
                     # Boundary Correction: Ensure probabilities stay within [0, 1]
                     if qindividuals1[i][j][w_val] <= 0:
                         qindividuals1[i][j][b_val] = 1.0

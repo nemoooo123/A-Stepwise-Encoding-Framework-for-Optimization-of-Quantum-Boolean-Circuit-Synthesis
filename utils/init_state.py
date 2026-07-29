@@ -176,6 +176,142 @@ def build_encode(cycles):
         prob_layer_seq_order.append(cycle_seq_probs) 
 
     return prob_layer_cycle_select, prob_layer_edge_break, prob_layer_path_nodes, prob_layer_seq_order, node_mapping_index, transition_trajectories
+def build_q_encode(cycles):
+    """
+    Initialize multi-level probability matrices for the optimization framework.
+    Constructs a four-layer encoding structure to represent cycle selection,
+    edge decomposition, path transformation, and gate sequencing.
+    """
+    print("cycles",cycles)
+    cycles_bit = len(cycles)
+    
+    # Calculate required encoding bits for cycle selection
+    if cycles_bit == 1:
+        bits = 1
+    else:
+        bits = ceil(log2(cycles_bit))
+
+    tmp_bits=2**bits
+    prob_layer_cycle_select = [np.full(tmp_bits, 1/tmp_bits) for _ in range(cycles_bit)]
+
+    # Encoding for edge selection within a cycle and gate ordering
+    # Layer 2: Probability matrix for identifying the "breaking edge" (starting point) 
+    # within each cycle. This determines the initial node of the decomposition.
+    prob_layer_edge_break=[]
+    # Layer 3: Intermediate node selection. When the Hamming distance between two nodes
+    # in a swap exceeds 1 bit, this layer encodes the specific path/intermediate nodes
+    # within the Boolean hypercube.
+    prob_layer_path_nodes=[]
+    prob_layer_seq_order=[] #Layer 4: Sequence directionality
+
+    # node_mapping_index: Stores the actual number of nodes in each cycle.
+    # Since the measurement (sampling) uses a binary representation (powers of 2),
+    # the binary space is often larger than the actual cycle length. This table 
+    # acts as a mapping constraint to ensure sampled results correctly align 
+    # with valid cycle nodes and prevent indexing errors during edge breaking.
+    node_mapping_index=[] 
+    # transition_trajectories: Stores the "transition_trajectoriesition Path" for each cycle.
+    # It records the sequence of nodes after cycle reversal and 
+    # closure (returning to the start node), providing the exact 
+    # trajectory for reversible gate synthesis.
+    transition_trajectories=[]
+    for i in cycles:
+        #Determine bit requirements for internal cycle edges
+        cycle_length=len(i)
+        if cycle_length==2:
+            node_mapping_index.append(1)
+        else:node_mapping_index.append(cycle_length)
+        
+        required_node_bits=ceil(log2(cycle_length))
+        
+
+        # Calculate encoding bits required for nodes within the current cycle
+        tmp_required_node_bits=2**required_node_bits
+        cycle_edge_prob_matrix=np.full(tmp_required_node_bits, 1/tmp_required_node_bits)
+        prob_layer_edge_break.append(cycle_edge_prob_matrix)
+        
+        # Calculate Hamming distances between elements to generate Layer 3
+        cycle_path_probs=[] #Nested list for a single cycle's Layer 3 data
+        cycle_seq_probs=[] # Nested list for a single cycle's Layer 4 data
+
+        i.reverse() # Reverse the cycle to ensure correct circuit synthesis order
+        
+        length=len(i)
+        ic=copy.copy(i)
+        i.append(i[0])# Close the cycle
+        transition_trajectories.append(i)
+        # If the cycle is not a simple swap (length != 2)
+        if length!=2:
+            for x in range(length):
+                start=i[x]
+                end=i[x+1]  
+                # Identify Hamming distance between consecutive states
+                dist_hamming=hamming_distance(start,end)
+                required_encoding_bits = ceil(log2(dist_hamming)) 
+                
+                # print(required_encoding_bits)
+                step_path_probs=[]
+                if required_encoding_bits==0:
+                    # Identifier for 1-bit difference (no complex sequence needed)
+                    step_path_probs.append([999,999])
+                    cycle_path_probs.append(step_path_probs)
+                else:
+                    step_path_prob_matrix=np.zeros((required_encoding_bits,2)) # Layer 3: Probability matrix for permutation selection
+                    step_path_prob_matrix.fill(1 / 2)
+                    for step_idx in range(dist_hamming):
+                        step_path_probs.append(step_path_prob_matrix)
+                    cycle_path_probs.append(step_path_probs)
+
+                # Layer 4: Sequence order probability (Head vs Tail movement)
+                # Formula derived for gate count based on bit difference
+                bit_gate_seq = 2 * dist_hamming - 1 - 1 
+
+                if bit_gate_seq==0: 
+                    step_seq_prob_matrix=[]
+                    step_seq_prob_matrix.append([999,999]) 
+                    cycle_seq_probs.append(step_seq_prob_matrix)
+                else:
+                    step_seq_prob_matrix=np.zeros((bit_gate_seq,2))
+                    step_seq_prob_matrix.fill(1 / 2)
+                    cycle_seq_probs.append(step_seq_prob_matrix)
+
+                
+            
+        else:
+            # Handle simple 2-element swap case
+            start=i[0]
+            end=i[1]
+            dist_hamming=hamming_distance(start,end)
+            required_encoding_bits = ceil(log2(dist_hamming))
+
+            step_path_probs=[]
+            if required_encoding_bits==0:
+                step_path_probs.append([999,999])
+                cycle_path_probs.append(step_path_probs)
+            else:
+                tmp_required_encoding_bits = 2**required_encoding_bits
+                step_path_prob_matrix = np.full(tmp_required_encoding_bits, 1/tmp_required_encoding_bits)
+                for q33 in range(dist_hamming):
+                    step_path_probs.append(step_path_prob_matrix)
+
+                cycle_path_probs.append(step_path_probs)
+
+            bit_gate_seq = 2 * dist_hamming - 1 - 1 
+
+            if bit_gate_seq==0: 
+                step_seq_prob_matrix=[]
+                step_seq_prob_matrix.append([999,999]) 
+                cycle_seq_probs.append(step_seq_prob_matrix)
+            else:
+                step_seq_prob_matrix=np.zeros((bit_gate_seq,2))
+                step_seq_prob_matrix.fill(1 / 2)
+                cycle_seq_probs.append(step_seq_prob_matrix)
+            
+
+        prob_layer_path_nodes.append(cycle_path_probs)
+        prob_layer_seq_order.append(cycle_seq_probs) 
+
+    return prob_layer_cycle_select, prob_layer_edge_break, prob_layer_path_nodes, prob_layer_seq_order, node_mapping_index, transition_trajectories
 
 def gen_nbrs(prob_layer_L1, prob_layer_L2, prob_layer_L3, prob_layer_L4, population_size):
     """
@@ -203,25 +339,25 @@ def sample_layer_L1(prob_matrices):
     Each matrix represents the selection probability for a specific cycle component.
     """
     # selection_results: Stores the sampled binary strings for all cycles
-    selection_results=[] 
+    selection_results=[]
     # Iterate through each cycle's probability matrix
-    for cycle_idx in range(len(prob_matrices)): 
-        binary_code = []
+    for cycle_idx in range(len(prob_matrices)):
+
         
-        # Iterate through each bit in the current cycle's probability matrix
-        for bit_idx in range(len(prob_matrices[cycle_idx])): 
-            # Generate a random float between 0 and 1 for stochastic sampling
-            random_threshold = np.random.rand(1)
-            
-            # Compare the stored probability against the random threshold
-            # If the probability of state 0 is less than the threshold, select state 1
-            if prob_matrices[cycle_idx][bit_idx][0] < random_threshold:
-                binary_code.append(1)
-            else:
-                binary_code.append(0)
-        
-        selection_results.append(binary_code)
-    # return [[1], [1]]
+        # Generate a random float between 0 and 1 for stochastic sampling
+        random_threshold = np.random.rand()
+
+        cumulative = 0.0  # 臨時累加變數
+        selected_idx = 0
+        prob_dist = prob_matrices[cycle_idx]
+        for idx in range(len(prob_dist)):
+            cumulative += prob_dist[idx]       # 累加當前的機率值
+            if cumulative > random_threshold:  # 一旦超過門檻
+                selected_idx = idx             # 選中這個索引
+                break                          # 立刻停止走訪
+
+        selection_results.append(selected_idx)
+    print("selection_results",selection_results)
     return selection_results
 
 def sample_layer_L2(prob_matrices_L2):
@@ -238,19 +374,26 @@ def sample_layer_L2(prob_matrices_L2):
         # binary_string: The sampled bits for the current cycle's entry point
         binary_string = []
         
-        # Iterate through each bit's probability distribution 
+        # Iterate through each bit's probability distribution
         for bit_prob in prob_matrices_L2[cycle_idx]:
-            # Generate a stochastic threshold for binary sampling
-            random_threshold = np.random.rand(1)
-            
-            # Binary selection based on the probability of state 0
-            if bit_prob[0] < random_threshold:
-                binary_string.append(1)
-            else:
-                binary_string.append(0)
+            # Generate a stochastic threshold for cumulative sampling
+            random_threshold = np.random.rand()
+
+            # Roulette-wheel selection: accumulate probabilities until the
+            # running sum exceeds the threshold, then pick that index.
+            cumulative = 0.0
+            selected_idx = 0
+            for idx in range(len(bit_prob)):
+                cumulative += bit_prob[idx]
+                if cumulative > random_threshold:
+                    selected_idx = idx
+                    break
+
+            binary_string.append(selected_idx)
 
         break_edge_codes.append(binary_string)
     # return [[0, 0, 0, 0], [0, 1, 0]]
+    print("break_edge_codes",break_edge_codes)
     return break_edge_codes
 
 def sample_layer_L3(prob_matrices_L3):

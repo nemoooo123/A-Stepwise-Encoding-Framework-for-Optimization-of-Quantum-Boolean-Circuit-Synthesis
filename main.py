@@ -5,7 +5,7 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from utils.data_loader import DataLoader
-from utils.init_state import find_cycles, build_encode
+from utils.init_state import find_cycles, build_encode, build_q_encode
 from core.AE_QTS import AE_QTS_run_single_experiment
 from core.DE import DE_run_single_experiment
 from core.PSO import PSO_run_single_experiment
@@ -86,8 +86,8 @@ def main():
 
         if algo_choice == 1:  # AE-QTS (Amplitude-Ensemble Quantum-Inspired Tabu Search)
             # Step 2: Initialize Quantum Individuals and Encoding Tables
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_q_encode(cycles)
+
             # Step 3: Run the core search algorithm for a single experiment
             fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,

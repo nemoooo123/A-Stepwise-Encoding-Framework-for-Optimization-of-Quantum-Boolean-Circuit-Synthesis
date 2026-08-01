@@ -1,4 +1,5 @@
 import math
+from collections import Counter
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.init_state import gen_nbrs
@@ -69,6 +70,7 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  entropy2_history_matrix,
                                  entropy3_history_matrix,
                                  entropy4_history_matrix,
+                                 pop_score_history_matrix,
                                  target_output,
                                  delta_theta):
     """
@@ -107,6 +109,14 @@ def AE_QTS_run_single_experiment(max_iterations,
         #原始版本
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
+        #-----
+        # Step 3.5: Population Consensus Recording
+        # Among this generation's neighbors, count how many share the SAME total
+        # gate count, and record the largest such group size. A rising value means
+        # the population is converging (more solutions land on the same score).
+        gate_counts = [m[1] for m in solution_metrics]
+        max_identical = max(Counter(gate_counts).values())
+        pop_score_history_matrix[experiment_id][current_iter - 1] = max_identical
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
         local_best_gate_count = circuit_solutions[local_best_idx][1]

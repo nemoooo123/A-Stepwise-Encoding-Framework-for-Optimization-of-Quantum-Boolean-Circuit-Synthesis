@@ -63,6 +63,10 @@ def main():
     entropy2_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     entropy3_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     entropy4_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    # Population consensus convergence (AE-QTS only): for each experiment and
+    # generation, the largest number of neighbors sharing the same total gate
+    # count. Rising => population converging. Shape: (experiments, generations).
+    pop_score_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -109,6 +113,7 @@ def main():
                 entropy2_history_matrix = entropy2_history_matrix,
                 entropy3_history_matrix = entropy3_history_matrix,
                 entropy4_history_matrix = entropy4_history_matrix,
+                pop_score_history_matrix = pop_score_history_matrix,
                 target_output = target_output,
                 delta_theta = 0.01
             )
@@ -387,6 +392,24 @@ def main():
         plt.savefig(entropy_plot_path)
         plt.close()
         print(f"[System] Entropy convergence plot saved to: {entropy_plot_path}")
+
+        # --- Generate Averaged Population Consensus Convergence Plot ---
+        # A single figure, single line: at each generation, the max number of
+        # neighbors sharing the same total gate count, averaged across all
+        # experiments. Rising => population converging.
+        avg_pop_consensus = np.nanmean(pop_score_history_matrix, axis=0)
+
+        plt.figure()
+        plt.plot(iterations, avg_pop_consensus, label='avg max identical solutions')
+        plt.xlabel('Iteration')
+        plt.ylabel(f'Avg Max # of Identical Scores (of {num_neighbors})')
+        plt.ylim(0, num_neighbors)
+        plt.title(f'{algo_name} Population Consensus ({num_experiments} experiments)')
+        plt.legend(fontsize='small')
+        pop_plot_path = os.path.join(save_dir, f"{base_filename}_pop_consensus.png")
+        plt.savefig(pop_plot_path)
+        plt.close()
+        print(f"[System] Averaged population consensus plot saved to: {pop_plot_path}")
 
     # --- Generate TXT Summary Report ---
     # This file provides a quick overview of the best results and system performance

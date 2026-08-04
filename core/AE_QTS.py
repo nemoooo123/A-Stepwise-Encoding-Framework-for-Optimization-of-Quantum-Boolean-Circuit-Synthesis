@@ -69,6 +69,7 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  entropy2_history_matrix,
                                  entropy3_history_matrix,
                                  entropy4_history_matrix,
+                                 mode_count_history_matrix,
                                  target_output,
                                  delta_theta):
     """
@@ -105,8 +106,16 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
+
+        # Diversity/convergence measure: among this iteration's neighbor solutions,
+        # how many share the single most-frequent score (total gate count)?
+        # A rising mode count (toward num_neighbors) means the population is
+        # collapsing onto one score, i.e. the search is converging.
+        iter_scores = [m[1] for m in solution_metrics]
+        _, _mode_counts = np.unique(iter_scores, return_counts=True)
+        mode_count_history_matrix[experiment_id][current_iter - 1] = int(_mode_counts.max())
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
@@ -161,7 +170,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         a2_history_matrix[experiment_id][current_iter - 1] = global_best_a2_count
 
 
-    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, global_best_gate_count, global_best_circuit
+    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, mode_count_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                num_neighbors, nbr1, nbr2, nbr3, nbr4, 

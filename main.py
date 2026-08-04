@@ -63,6 +63,8 @@ def main():
     entropy2_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     entropy3_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     entropy4_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    # Per-iteration count of neighbors sharing the most-frequent score (AE-QTS & DE)
+    mode_count_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -89,7 +91,7 @@ def main():
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
             
             # Step 3: Run the core search algorithm for a single experiment
-            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, mode_count_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -109,6 +111,7 @@ def main():
                 entropy2_history_matrix = entropy2_history_matrix,
                 entropy3_history_matrix = entropy3_history_matrix,
                 entropy4_history_matrix = entropy4_history_matrix,
+                mode_count_history_matrix = mode_count_history_matrix,
                 target_output = target_output,
                 delta_theta = 0.01
             )
@@ -191,7 +194,7 @@ def main():
             # unique-gate-count objective it searches on, while its "unique_history_matrix" param
             # carries the paired total gate count. Swap on unpack so main.py's fitness_history_matrix
             # always means "total" and unique_history_matrix always means "unique", matching AE-QTS.
-            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, final_best_gate, best_circuit_this_run = DE_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, mode_count_history_matrix, final_best_gate, best_circuit_this_run = DE_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -207,6 +210,7 @@ def main():
                 unique_history_matrix = unique_history_matrix,
                 a1_history_matrix = a1_history_matrix,
                 a2_history_matrix = a2_history_matrix,
+                mode_count_history_matrix = mode_count_history_matrix,
                 target_output = target_output,
                 CR = 0.05,
             )
@@ -373,12 +377,18 @@ def main():
         avg_entropy2 = np.nanmean(entropy2_history_matrix, axis=0)
         avg_entropy3 = np.nanmean(entropy3_history_matrix, axis=0)
         avg_entropy4 = np.nanmean(entropy4_history_matrix, axis=0)
+        # Overall entropy: mean of the four per-layer entropy curves at each iteration
+        avg_entropy_overall = np.nanmean(
+            np.vstack([avg_entropy1, avg_entropy2, avg_entropy3, avg_entropy4]), axis=0
+        )
 
         plt.figure()
         plt.plot(iterations, avg_entropy1, label='Q1 (cycle select)')
         plt.plot(iterations, avg_entropy2, label='Q2 (edge break)')
         plt.plot(iterations, avg_entropy3, label='Q3 (path nodes)')
         plt.plot(iterations, avg_entropy4, label='Q4 (seq order)')
+        plt.plot(iterations, avg_entropy_overall, label='Overall (mean of Q1-Q4)',
+                 color='black', linewidth=2.0)
         plt.xlabel('Iteration')
         plt.ylabel('Mean Shannon Entropy (bits)')
         plt.title(f'{algo_name} Quantum State Entropy Convergence ({num_experiments} experiments)')
@@ -387,6 +397,28 @@ def main():
         plt.savefig(entropy_plot_path)
         plt.close()
         print(f"[System] Entropy convergence plot saved to: {entropy_plot_path}")
+
+    # --- Generate Averaged Mode-Count Convergence Plot (AE-QTS & DE) ---
+    # For each iteration, how many of the num_neighbors candidate solutions share
+    # the single most-frequent score, averaged across all experiments. Rising
+    # toward num_neighbors => population converging onto one score.
+    has_mode_data = algo_choice in (1, 5)
+    if has_mode_data:
+        avg_mode_count = np.nanmean(mode_count_history_matrix, axis=0)
+
+        plt.figure()
+        plt.plot(iterations, avg_mode_count, label='avg most-repeated score count')
+        plt.axhline(num_neighbors, color='gray', linestyle='--',
+                    label=f'population size ({num_neighbors})')
+        plt.xlabel('Iteration')
+        plt.ylabel('Most-repeated score count (avg)')
+        plt.ylim(0, num_neighbors + 0.5)
+        plt.title(f'{algo_name} Solution Mode-Count Convergence ({num_experiments} experiments)')
+        plt.legend()
+        mode_plot_path = os.path.join(save_dir, f"{base_filename}_mode_count_convergence.png")
+        plt.savefig(mode_plot_path)
+        plt.close()
+        print(f"[System] Mode-count convergence plot saved to: {mode_plot_path}")
 
     # --- Generate TXT Summary Report ---
     # This file provides a quick overview of the best results and system performance
@@ -447,6 +479,8 @@ def main():
                 build_history_df(entropy2_history_matrix).to_excel(writer, sheet_name='Entropy_Q2')
                 build_history_df(entropy3_history_matrix).to_excel(writer, sheet_name='Entropy_Q3')
                 build_history_df(entropy4_history_matrix).to_excel(writer, sheet_name='Entropy_Q4')
+            if has_mode_data:
+                build_history_df(mode_count_history_matrix).to_excel(writer, sheet_name='Mode_Count')
 
         # Console Feedback
         print(f"\n[System] Summary report saved to: {txt_path}")

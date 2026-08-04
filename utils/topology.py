@@ -17,31 +17,36 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         pop_size: Total individuals in population (N).
         trajectories: Database of transition paths (trans).
     """
+    # print("檢修站")
+    # print("pop_l1",pop_l1[0])
+    # print("pop_l2",pop_l2[0])
+    # print("pop_l3",pop_l3[0])
+    # print("pop_l4",pop_l4[0])
     circuit_solutions = []
     
     for i in range(pop_size):
-        # Layer 1: Component priority decoding (Binary to Decimal)
-        decoded_l1 = [int(''.join(map(str, bits)), 2) for bits in pop_l1[i]]
+    #     # Layer 1: Component priority decoding (Binary to Decimal)
+    #     decoded_l1 = [int(''.join(map(str, bits)), 2) for bits in pop_l1[i]]
             
-        # Layer 2: Entry point decoding with modulo constraint handling
+    #     # Layer 2: Entry point decoding with modulo constraint handling
         decoded_l2 = []
         for idx, bits in enumerate(pop_l2[i]):
-            val = int(''.join(map(str, bits)), 2)
+            val = bits
             limit = mapping_table[idx]
             # Ensure the starting index is within the valid range of the cycle
             decoded_l2.append(val % limit if val >= limit else val)
-
-        # Layer 3: Intermediate node decoding (Handling special 999 bypass flag)
-        decoded_l3 = []
-        for cycle in pop_l3[i]:
-            cycle_steps = []
-            for step in cycle:
-                if step[0] == 999:
-                    cycle_steps.append([999])
-                else:
-                    # Convert each node bit-string to a decimal index
-                    cycle_steps.append([int(''.join(map(str, node)), 2) for node in step])
-            decoded_l3.append(cycle_steps)
+        
+    #     # Layer 3: Intermediate node decoding (Handling special 999 bypass flag)
+    #     decoded_l3 = []
+    #     for cycle in pop_l3[i]:
+    #         cycle_steps = []
+    #         for step in cycle:
+    #             if step[0] == 999:
+    #                 cycle_steps.append([999])
+    #             else:
+    #                 # Convert each node bit-string to a decimal index
+    #                 cycle_steps.append([int(''.join(map(str, node)), 2) for node in step])
+    #         decoded_l3.append(cycle_steps)
         
         
         
@@ -60,9 +65,11 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution,a1,a2, a3, bouns_fitness = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
-                                          pop_l4[i], num_units, trajectories, current_iter)
+        # individual_solution,a1,a2, a3, bouns_fitness = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
+        #                                   pop_l4[i], num_units, trajectories, current_iter)
 
+        individual_solution,a1,a2, a3, bouns_fitness = synthesize_route(pop_l1[i], decoded_l2, pop_l3[i],
+                                          pop_l4[i], num_units, trajectories, current_iter)
         # Gates are lists (unhashable), so cast each to a tuple before deduplicating with a set.
         gate_set = set(tuple(gate) for gate in individual_solution)
         # duplicate_count = len(individual_solution) - len(gate_set)

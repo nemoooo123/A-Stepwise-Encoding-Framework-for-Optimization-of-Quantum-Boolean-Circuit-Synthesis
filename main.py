@@ -63,6 +63,8 @@ def main():
     entropy2_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     entropy3_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     entropy4_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    # Per-iteration count of neighbors sharing the most-frequent score (AE-QTS only)
+    mode_count_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -89,7 +91,7 @@ def main():
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_q_encode(cycles)
 
             # Step 3: Run the core search algorithm for a single experiment
-            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
+            fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, mode_count_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
                 num_neighbors = num_neighbors,
@@ -109,6 +111,7 @@ def main():
                 entropy2_history_matrix = entropy2_history_matrix,
                 entropy3_history_matrix = entropy3_history_matrix,
                 entropy4_history_matrix = entropy4_history_matrix,
+                mode_count_history_matrix = mode_count_history_matrix,
                 target_output = target_output,
                 delta_theta = 0.01
             )
@@ -380,13 +383,34 @@ def main():
         plt.plot(iterations, avg_entropy3, label='Q3 (path nodes)')
         plt.plot(iterations, avg_entropy4, label='Q4 (seq order)')
         plt.xlabel('Iteration')
-        plt.ylabel('Mean Shannon Entropy (bits)')
+        plt.ylabel('Mean Normalized Shannon Entropy (0-1)')
+        plt.ylim(-0.02, 1.02)
         plt.title(f'{algo_name} Quantum State Entropy Convergence ({num_experiments} experiments)')
         plt.legend()
         entropy_plot_path = os.path.join(save_dir, f"{base_filename}_entropy_convergence.png")
         plt.savefig(entropy_plot_path)
         plt.close()
         print(f"[System] Entropy convergence plot saved to: {entropy_plot_path}")
+
+        # --- Generate Averaged Mode-Count Convergence Plot (AE-QTS only) ---
+        # For each iteration, how many of the num_neighbors candidate solutions
+        # share the single most-frequent score, averaged across all experiments.
+        # Rising toward num_neighbors => population converging onto one score.
+        avg_mode_count = np.nanmean(mode_count_history_matrix, axis=0)
+
+        plt.figure()
+        plt.plot(iterations, avg_mode_count, label='avg most-repeated score count')
+        plt.axhline(num_neighbors, color='gray', linestyle='--',
+                    label=f'population size ({num_neighbors})')
+        plt.xlabel('Iteration')
+        plt.ylabel('Most-repeated score count (avg)')
+        plt.ylim(0, num_neighbors + 0.5)
+        plt.title(f'{algo_name} Solution Mode-Count Convergence ({num_experiments} experiments)')
+        plt.legend()
+        mode_plot_path = os.path.join(save_dir, f"{base_filename}_mode_count_convergence.png")
+        plt.savefig(mode_plot_path)
+        plt.close()
+        print(f"[System] Mode-count convergence plot saved to: {mode_plot_path}")
 
     # --- Generate TXT Summary Report ---
     # This file provides a quick overview of the best results and system performance
@@ -447,6 +471,7 @@ def main():
                 build_history_df(entropy2_history_matrix).to_excel(writer, sheet_name='Entropy_Q2')
                 build_history_df(entropy3_history_matrix).to_excel(writer, sheet_name='Entropy_Q3')
                 build_history_df(entropy4_history_matrix).to_excel(writer, sheet_name='Entropy_Q4')
+                build_history_df(mode_count_history_matrix).to_excel(writer, sheet_name='Mode_Count')
 
         # Console Feedback
         print(f"\n[System] Summary report saved to: {txt_path}")

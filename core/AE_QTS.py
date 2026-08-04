@@ -5,23 +5,45 @@ from utils.init_state import gen_nbrs
 from utils.topology import decode_and_synthesize,verify_circuit_logic
 
 
-def _shannon_entropy_of_distribution(prob_dist):
+def _shannon_entropy_of_distribution(prob_dist, normalize=True):
     """
     Compute the Shannon entropy (base-2) of a single probability distribution.
     H = -sum(p * log2(p)) for p > 0.
+
+    A probability distribution here is NOT restricted to 2 outcomes like [0.5, 0.5];
+    it can hold n outcomes, e.g. the 2-qubit state [0.25, 0.25, 0.25, 0.25] over
+    {00, 01, 10, 11}, or larger. Shannon entropy is well defined for any n.
+
+    Because the maximum possible entropy of an n-outcome distribution is log2(n)
+    (1 bit for n=2, 2 bits for n=4, 3 bits for n=8, ...), raw entropy is not
+    comparable across distributions of different sizes. With normalize=True we
+    return the *normalized* entropy (a.k.a. efficiency) H / log2(n), which lives
+    in [0, 1] for every n:
+        1.0 -> perfectly uniform / maximally uncertain (e.g. [0.5,0.5] or [0.25]*4)
+        0.0 -> fully converged onto a single outcome.
+    This is what makes Q1..Q4 (which mix 2-, 4-, 8-... outcome distributions)
+    averageable and directly comparable on one convergence plot.
     """
+    n = len(prob_dist)
     entropy = 0.0
     for p in prob_dist:
         if p > 0:
             entropy -= p * math.log2(p)
+
+    if normalize:
+        # Max entropy of an n-outcome distribution is log2(n).
+        # A degenerate 1-outcome distribution carries no uncertainty -> 0.
+        max_entropy = math.log2(n) if n > 1 else 0.0
+        entropy = entropy / max_entropy if max_entropy > 0 else 0.0
+
     return entropy
 
 
-def mean_shannon_entropy(quantum_state):
+def mean_shannon_entropy(quantum_state, normalize=True):
     """
     Traverse a hierarchical quantum state (nested probability layers) and return
-    the average Shannon entropy over every valid probability distribution.
-    [999, 999] sentinel entries are skipped.
+    the average (normalized) Shannon entropy over every valid probability
+    distribution. [999, 999] sentinel entries are skipped.
     """
     entropies = []
 
@@ -29,7 +51,7 @@ def mean_shannon_entropy(quantum_state):
         if isinstance(node, np.ndarray):
             if node.ndim == 1:
                 if not np.any(node == 999):
-                    entropies.append(_shannon_entropy_of_distribution(node))
+                    entropies.append(_shannon_entropy_of_distribution(node, normalize))
             else:
                 for row in node:
                     _collect(row)
@@ -39,7 +61,7 @@ def mean_shannon_entropy(quantum_state):
                 isinstance(x, (int, float, np.integer, np.floating)) for x in node
             ):
                 if 999 not in node:
-                    entropies.append(_shannon_entropy_of_distribution(node))
+                    entropies.append(_shannon_entropy_of_distribution(node, normalize))
             else:
                 for child in node:
                     _collect(child)
@@ -69,6 +91,7 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  entropy2_history_matrix,
                                  entropy3_history_matrix,
                                  entropy4_history_matrix,
+                                 mode_count_history_matrix,
                                  target_output,
                                  delta_theta):
     """
@@ -105,8 +128,16 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
+
+        # Diversity/convergence measure: among this iteration's neighbor solutions,
+        # how many share the single most-frequent score (total gate count)?
+        # A rising mode count (toward num_neighbors) means the population is
+        # collapsing onto one score, i.e. the search is converging.
+        iter_scores = [m[1] for m in solution_metrics]
+        _, _mode_counts = np.unique(iter_scores, return_counts=True)
+        mode_count_history_matrix[experiment_id][current_iter - 1] = int(_mode_counts.max())
         #-----
         local_best_idx = sorted_metrics_getbest[0][5]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
@@ -161,7 +192,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         a2_history_matrix[experiment_id][current_iter - 1] = global_best_a2_count
 
 
-    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, global_best_gate_count, global_best_circuit
+    return fitness_history_matrix, unique_history_matrix, a1_history_matrix, a2_history_matrix, entropy1_history_matrix, entropy2_history_matrix, entropy3_history_matrix, entropy4_history_matrix, mode_count_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                num_neighbors, nbr1, nbr2, nbr3, nbr4, 
@@ -184,55 +215,55 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
 
         # --- Update qindividuals1 (Strategy/Trajectory level) ---
         # best_sol1 and worst_sol1 represent the discrete decisions made by the neighbors
-        best_sol1 = [list(map(int, row)) for row in nbr1[best_idx].tolist()]
-        worst_sol1 = [list(map(int, row)) for row in nbr1[worst_idx].tolist()]
-
+        
+        best_sol1 = nbr1[best_idx]
+        worst_sol1 = nbr1[worst_idx]
         for i in range(len(qindividuals1)):
-            for j in range(len(qindividuals1[i])):
-                b_val = best_sol1[i][j]
-                w_val = worst_sol1[i][j]
-                if b_val != w_val:
-                    # Increment probability of the 'best' decision, decrement the 'worst'
-                    qindividuals1[i][j][b_val] += delta_theta/(t+1)
-                    qindividuals1[i][j][w_val] -= delta_theta/(t+1)
+            
+            b_val = best_sol1[i]
+            w_val = worst_sol1[i]
+            if b_val != w_val:
+                # Increment probability of the 'best' decision, decrement the 'worst'
+                qindividuals1[i][b_val] += delta_theta/(t+1)
+                qindividuals1[i][w_val] -= delta_theta/(t+1)
 
-                    # Boundary Correction: Ensure probabilities stay within [0, 1]
-                    if qindividuals1[i][j][w_val] <= 0:
-                        qindividuals1[i][j][b_val] = 1.0
-                        qindividuals1[i][j][w_val] = 0.0
-
+                # Boundary Correction: Ensure probabilities stay within [0, 1]
+                if qindividuals1[i][w_val] <= 0:
+                    qindividuals1[i][b_val] = 1.0
+                    qindividuals1[i][w_val] = 0.0
+        
         # --- Update qindividuals2 (Segment level) ---
         best_sol2 = nbr2[best_idx]
         worst_sol2 = nbr2[worst_idx]
+        
 
         for i in range(len(qindividuals2)):
-            for j in range(len(qindividuals2[i])):
-                if best_sol2[i][j] != worst_sol2[i][j]:
-                    qindividuals2[i][j][best_sol2[i][j]] += delta_theta/(t+1)
-                    qindividuals2[i][j][worst_sol2[i][j]] -= delta_theta/(t+1)
-                    if qindividuals2[i][j][worst_sol2[i][j]] <= 0:
-                        qindividuals2[i][j][best_sol2[i][j]] = 1.0
-                        qindividuals2[i][j][worst_sol2[i][j]] = 0.0
-
+            
+            if best_sol2[i] != worst_sol2[i]:
+                qindividuals2[i][best_sol2[i]] += delta_theta/(t+1)
+                qindividuals2[i][worst_sol2[i]] -= delta_theta/(t+1)
+                if qindividuals2[i][worst_sol2[i]] <= 0:
+                    qindividuals2[i][best_sol2[i]] = 1.0
+                    qindividuals2[i][worst_sol2[i]] = 0.0
+        
         # --- Update qindividuals3 (Route/Path level) ---
         best_sol3 = nbr3[best_idx]
         worst_sol3 = nbr3[worst_idx]
-
+        
         for i in range(len(qindividuals3)):
             for j in range(len(best_sol3[i])):
                 for k in range(len(best_sol3[i][j])):
                     if best_sol3[i][j][k] != 999 and worst_sol3[i][j][k] != 999:
                         num_choices = len(qindividuals3[i][j][k])
-                        for l in range(num_choices):
-                            b_bit = best_sol3[i][j][k][l]
-                            w_bit = worst_sol3[i][j][k][l]
-                            if b_bit != w_bit:
-                                qindividuals3[i][j][k][l][b_bit] += (delta_theta/(t+1))
-                                qindividuals3[i][j][k][l][w_bit] -= (delta_theta/(t+1))
-                                if qindividuals3[i][j][k][l][w_bit] <= 0:
-                                    qindividuals3[i][j][k][l][b_bit] = 1.0
-                                    qindividuals3[i][j][k][l][w_bit] = 0.0
-
+                        b_bit = best_sol3[i][j][k]
+                        w_bit = worst_sol3[i][j][k]
+                        if b_bit != w_bit:
+                            qindividuals3[i][j][k][b_bit] += (delta_theta/(t+1))
+                            qindividuals3[i][j][k][w_bit] -= (delta_theta/(t+1))
+                            if qindividuals3[i][j][k][w_bit] <= 0:
+                                qindividuals3[i][j][k][b_bit] = 1.0
+                                qindividuals3[i][j][k][w_bit] = 0.0
+        
         # --- Update qindividuals4 (Gate Order level) ---
         best_sol4 = nbr4[best_idx]
         worst_sol4 = nbr4[worst_idx]

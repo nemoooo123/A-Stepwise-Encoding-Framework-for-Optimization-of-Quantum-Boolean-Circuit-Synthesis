@@ -124,7 +124,7 @@ def build_encode(cycles):
                     step_path_prob_matrix=np.zeros((required_encoding_bits,2)) # Layer 3: Probability matrix for permutation selection
                     step_path_prob_matrix.fill(1 / 2)
                     for step_idx in range(dist_hamming):
-                        step_path_probs.append(step_path_prob_matrix)
+                        step_path_probs.append(step_path_prob_matrix.copy())
                     cycle_path_probs.append(step_path_probs)
 
                 # Layer 4: Sequence order probability (Head vs Tail movement)
@@ -138,7 +138,7 @@ def build_encode(cycles):
                 else:
                     step_seq_prob_matrix=np.zeros((bit_gate_seq,2))
                     step_seq_prob_matrix.fill(1 / 2)
-                    cycle_seq_probs.append(step_seq_prob_matrix)
+                    cycle_seq_probs.append(step_seq_prob_matrix.copy())
 
                 
             
@@ -157,7 +157,7 @@ def build_encode(cycles):
                 step_path_prob_matrix=np.zeros((required_encoding_bits,2)) 
                 step_path_prob_matrix.fill(1 / 2)
                 for q33 in range(dist_hamming):
-                    step_path_probs.append(step_path_prob_matrix)
+                    step_path_probs.append(step_path_prob_matrix.copy())
                 cycle_path_probs.append(step_path_probs)
 
             bit_gate_seq = 2 * dist_hamming - 1 - 1 
@@ -169,7 +169,7 @@ def build_encode(cycles):
             else:
                 step_seq_prob_matrix=np.zeros((bit_gate_seq,2))
                 step_seq_prob_matrix.fill(1 / 2)
-                cycle_seq_probs.append(step_seq_prob_matrix)
+                cycle_seq_probs.append(step_seq_prob_matrix.copy())
             
 
         prob_layer_path_nodes.append(cycle_path_probs)

@@ -46,7 +46,7 @@ def main():
     # np.random.seed(random_seed)
 
     # Experimental Configuration
-    num_experiments = 10
+    num_experiments = 100
     max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
@@ -299,21 +299,6 @@ def main():
                 limit = 25
             )
 
-        elif algo_choice == 10: # AEQTS-STEP (AE-QTS optimizer over the Stepwise encoding)
-            # No 4-layer state to build: the Stepwise encoder derives its own genome
-            # layout directly from the target permutation.
-            fitness_history_matrix, unique_history_matrix, mode_count_history_matrix, step_entropy_history_matrix, final_best_gate, best_circuit_this_run = STEP_run_single_experiment(
-                max_iterations = max_iterations,
-                num_neighbors = num_neighbors,
-                experiment_id = r,
-                target_output = target_output,
-                fitness_history_matrix = fitness_history_matrix,
-                unique_history_matrix = unique_history_matrix,
-                mode_count_history_matrix = mode_count_history_matrix,
-                entropy_history_matrix = step_entropy_history_matrix,
-                delta_theta = 0.01
-            )
-
 
 
         experiment_end_time = time.time()
@@ -354,7 +339,7 @@ def main():
     # Algorithm mapping: mapping choice ID to descriptive names
     algo_names = {
         1: "AE-QTS", 2: "QTS", 3: "QEA", 4: "GA", 5: "DE",
-        6: "TS", 7: "PSO", 8: "WOA", 9: "ABC", 10: "AEQTS-STEP"
+        6: "TS", 7: "PSO", 8: "WOA", 9: "ABC"
     }
     algo_name = algo_names.get(algo_choice, "Other")
     

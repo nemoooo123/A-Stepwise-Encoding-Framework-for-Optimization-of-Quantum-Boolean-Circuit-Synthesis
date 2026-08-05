@@ -27,7 +27,7 @@ def main():
     try:
         num_bits = int(input("Enter number of bits (n): "))
         problem_idx = int(input("Enter problem index: "))
-        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: QTS, 3: QEA, 4: GA, 5: DE, 6: TS, 7: PSO, 8: WOA, 9: ABC, 10: AEQTS-STEP): "))
+        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: QTS, 3: QEA, 4: GA, 5: DE, 6: TS, 7: PSO, 8: WOA, 9: ABC): "))
     except ValueError:
         print("Invalid input. Please enter numeric values.")
         return

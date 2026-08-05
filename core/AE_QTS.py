@@ -128,7 +128,7 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[1],x[0]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
         sorted_metrics_getbest = sorted(solution_metrics, key=lambda x: x[1])
 
         # Diversity/convergence measure: among this iteration's neighbor solutions,

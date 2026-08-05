@@ -15,7 +15,6 @@ from core.GA import GA_run_single_experiment
 from core.ABC import ABC_run_single_experiment
 from core.WOA import WOA_run_single_experiment
 from core.QEA import QEA_run_single_experiment
-from core.STEP import STEP_run_single_experiment
 def main():
     """
     Main execution entry point for Reversible Circuit Synthesis experiments.

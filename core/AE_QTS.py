@@ -48,6 +48,70 @@ def mean_shannon_entropy(quantum_state):
     return sum(entropies) / len(entropies) if entropies else 0.0
 
 
+def collect_entropy_blocks(quantum_state):
+    """
+    Flatten a hierarchical quantum state into the list of 2-D probability blocks
+    whose rows are the distributions mean_shannon_entropy() would average over.
+
+    The nesting layout is fixed for the whole experiment and updateQ only writes
+    individual elements in place, so the blocks stay live views of the current
+    state: collect once, then re-read them every iteration.
+
+    Returns None if a distribution is held in a plain Python list rather than an
+    ndarray (which cannot be tracked as a view), signalling the caller to fall
+    back to mean_shannon_entropy().
+    """
+    blocks = []
+
+    def _collect(node):
+        if isinstance(node, np.ndarray):
+            if node.ndim == 1:
+                if not np.any(node == 999):
+                    blocks.append(node.reshape(1, -1))
+            elif np.any(node == 999):
+                # Mixed block: keep only the sentinel-free rows, as _collect does.
+                for row in node:
+                    _collect(row)
+            else:
+                blocks.append(node)
+        elif isinstance(node, (list, tuple)):
+            # A leaf distribution is a flat list of scalar probabilities.
+            if len(node) > 0 and all(
+                isinstance(x, (int, float, np.integer, np.floating)) for x in node
+            ):
+                if 999 not in node:
+                    # Not an ndarray, so it cannot be tracked as a live view.
+                    raise _UntrackableState()
+            else:
+                for child in node:
+                    _collect(child)
+
+    try:
+        _collect(quantum_state)
+    except _UntrackableState:
+        return None
+    return blocks
+
+
+class _UntrackableState(Exception):
+    """Raised internally when a quantum state cannot be viewed as ndarray blocks."""
+
+
+def mean_shannon_entropy_cached(quantum_state, blocks):
+    """
+    Vectorized equivalent of mean_shannon_entropy() using the blocks previously
+    collected by collect_entropy_blocks(). Falls back to the traversal-based
+    implementation when no blocks were collected.
+    """
+    if blocks is None:
+        return mean_shannon_entropy(quantum_state)
+    if not blocks:
+        return 0.0
+
+    probs = np.concatenate(blocks, axis=0) if len(blocks) > 1 else blocks[0]
+    logs = np.zeros_like(probs, dtype=float)
+    np.log2(probs, out=logs, where=probs > 0)
+    return float(-(probs * logs).sum() / probs.shape[0])
 
 
 def AE_QTS_run_single_experiment(max_iterations, 
@@ -83,6 +147,14 @@ def AE_QTS_run_single_experiment(max_iterations,
     global_best_a1_count = float('inf')
     global_best_a2_count = float('inf')
     global_best_circuit = []
+
+    # Collect the entropy measurement views once: the quantum states keep their
+    # nesting layout for the whole run and are only ever updated element-wise,
+    # so re-walking them every iteration was pure overhead.
+    entropy_blocks = [
+        collect_entropy_blocks(q)
+        for q in (qindividuals1, qindividuals2, qindividuals3, qindividuals4)
+    ]
 
     while current_iter < max_iterations:
         current_iter += 1
@@ -141,10 +213,10 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 4.5: Quantum State Convergence Measurement
         # Record the mean Shannon entropy of each updated quantum state for this
         # iteration. Lower entropy => that state is more converged.
-        entropy1_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals1)
-        entropy2_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals2)
-        entropy3_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals3)
-        entropy4_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy(qindividuals4)
+        entropy1_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy_cached(qindividuals1, entropy_blocks[0])
+        entropy2_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy_cached(qindividuals2, entropy_blocks[1])
+        entropy3_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy_cached(qindividuals3, entropy_blocks[2])
+        entropy4_history_matrix[experiment_id][current_iter - 1] = mean_shannon_entropy_cached(qindividuals4, entropy_blocks[3])
 
         # Step 5: Global Best Tracking
         # Update the overall best solution if a new minimum gate count is discovered

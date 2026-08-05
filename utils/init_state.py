@@ -124,7 +124,7 @@ def build_encode(cycles):
                     step_path_prob_matrix=np.zeros((required_encoding_bits,2)) # Layer 3: Probability matrix for permutation selection
                     step_path_prob_matrix.fill(1 / 2)
                     for step_idx in range(dist_hamming):
-                        step_path_probs.append(step_path_prob_matrix)
+                        step_path_probs.append(step_path_prob_matrix.copy())
                     cycle_path_probs.append(step_path_probs)
 
                 # Layer 4: Sequence order probability (Head vs Tail movement)
@@ -138,7 +138,7 @@ def build_encode(cycles):
                 else:
                     step_seq_prob_matrix=np.zeros((bit_gate_seq,2))
                     step_seq_prob_matrix.fill(1 / 2)
-                    cycle_seq_probs.append(step_seq_prob_matrix)
+                    cycle_seq_probs.append(step_seq_prob_matrix.copy())
 
                 
             
@@ -154,10 +154,11 @@ def build_encode(cycles):
                 step_path_probs.append([999,999])
                 cycle_path_probs.append(step_path_probs)
             else:
-                step_path_prob_matrix=np.zeros((required_encoding_bits,2)) 
+                step_path_prob_matrix=np.zeros((required_encoding_bits,2))
                 step_path_prob_matrix.fill(1 / 2)
                 for q33 in range(dist_hamming):
-                    step_path_probs.append(step_path_prob_matrix)
+                    # Independent copy per priority field (see length!=2 branch above).
+                    step_path_probs.append(step_path_prob_matrix.copy())
                 cycle_path_probs.append(step_path_probs)
 
             bit_gate_seq = 2 * dist_hamming - 1 - 1 
@@ -209,10 +210,13 @@ def sample_layer_L1(prob_matrices):
         binary_code = []
         
         # Iterate through each bit in the current cycle's probability matrix
-        for bit_idx in range(len(prob_matrices[cycle_idx])): 
-            # Generate a random float between 0 and 1 for stochastic sampling
-            random_threshold = np.random.rand(1)
-            
+        for bit_idx in range(len(prob_matrices[cycle_idx])):
+            # Generate a random float between 0 and 1 for stochastic sampling.
+            # random.random() is used instead of np.random.rand(1): this runs once
+            # per encoded bit, and allocating a 1-element ndarray per draw (plus the
+            # array-valued comparison it forces) dominated the sampling cost.
+            random_threshold = random.random()
+
             # Compare the stored probability against the random threshold
             # If the probability of state 0 is less than the threshold, select state 1
             if prob_matrices[cycle_idx][bit_idx][0] < random_threshold:
@@ -241,8 +245,8 @@ def sample_layer_L2(prob_matrices_L2):
         # Iterate through each bit's probability distribution 
         for bit_prob in prob_matrices_L2[cycle_idx]:
             # Generate a stochastic threshold for binary sampling
-            random_threshold = np.random.rand(1)
-            
+            random_threshold = random.random()
+
             # Binary selection based on the probability of state 0
             if bit_prob[0] < random_threshold:
                 binary_string.append(1)
@@ -284,8 +288,8 @@ def sample_layer_L3(prob_matrices_L3):
                 else:
                     # Perform bit-wise stochastic sampling for the intermediate node
                     for bit_prob in substep_matrix:
-                        random_threshold = np.random.rand(1)
-                        
+                        random_threshold = random.random()
+
                         if bit_prob[0] < random_threshold:
                             binary_node.append(1)
                         else:
@@ -322,8 +326,8 @@ def sample_layer_L4(prob_matrices_L4):
             # Iterate through the probability distribution for each sequencing decision
             for bit_idx in range(len(prob_matrices_L4[cycle_idx][step_idx])):
                 # Generate a random threshold for stochastic sampling
-                random_threshold = np.random.rand(1)
-                
+                random_threshold = random.random()
+
                 # prob_value: The specific probability for this sequencing bit
                 prob_value = prob_matrices_L4[cycle_idx][step_idx][bit_idx][0]
                 

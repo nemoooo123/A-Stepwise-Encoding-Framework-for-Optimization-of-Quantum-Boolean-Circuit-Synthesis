@@ -15,6 +15,7 @@ from core.GA import GA_run_single_experiment
 from core.ABC import ABC_run_single_experiment
 from core.WOA import WOA_run_single_experiment
 from core.QEA import QEA_run_single_experiment
+from core.STEP import STEP_run_single_experiment
 def main():
     """
     Main execution entry point for Reversible Circuit Synthesis experiments.
@@ -27,7 +28,7 @@ def main():
     try:
         num_bits = int(input("Enter number of bits (n): "))
         problem_idx = int(input("Enter problem index: "))
-        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: QTS, 3: QEA, 4: GA, 5: DE, 6: TS, 7: PSO, 8: WOA, 9: ABC): "))
+        algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: QTS, 3: QEA, 4: GA, 5: DE, 6: TS, 7: PSO, 8: WOA, 9: ABC, 10: AEQTS-STEP): "))
     except ValueError:
         print("Invalid input. Please enter numeric values.")
         return
@@ -65,6 +66,8 @@ def main():
     entropy4_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     # Per-iteration count of neighbors sharing the most-frequent score (AE-QTS & DE)
     mode_count_history_matrix = np.full((num_experiments, max_iterations), np.nan)
+    # Mean bit-entropy of the flat genome probability vector (AEQTS-STEP only)
+    step_entropy_history_matrix = np.full((num_experiments, max_iterations), np.nan)
     best_scores_per_experiment = []
     best_circuit_per_experiment = []
     execution_times = []
@@ -297,7 +300,22 @@ def main():
                 limit = 25
             )
 
-        
+        elif algo_choice == 10: # AEQTS-STEP (AE-QTS optimizer over the Stepwise encoding)
+            # No 4-layer state to build: the Stepwise encoder derives its own genome
+            # layout directly from the target permutation.
+            fitness_history_matrix, unique_history_matrix, mode_count_history_matrix, step_entropy_history_matrix, final_best_gate, best_circuit_this_run = STEP_run_single_experiment(
+                max_iterations = max_iterations,
+                num_neighbors = num_neighbors,
+                experiment_id = r,
+                target_output = target_output,
+                fitness_history_matrix = fitness_history_matrix,
+                unique_history_matrix = unique_history_matrix,
+                mode_count_history_matrix = mode_count_history_matrix,
+                entropy_history_matrix = step_entropy_history_matrix,
+                delta_theta = 0.01
+            )
+
+
 
         experiment_end_time = time.time()
         elapsed_time = experiment_end_time - experiment_start_time
@@ -313,8 +331,8 @@ def main():
     average_convergence_curve = np.mean(fitness_history_matrix, axis=0)
     std_convergence_curve = np.std(fitness_history_matrix, axis=0)
 
-    # Unique gate count convergence is only populated for algorithms that track it (AE-QTS, DE)
-    has_unique_data = algo_choice in (1, 5)
+    # Unique gate count convergence is only populated for algorithms that track it (AE-QTS, DE, AEQTS-STEP)
+    has_unique_data = algo_choice in (1, 5, 10)
     if has_unique_data:
         average_unique_curve = np.mean(unique_history_matrix, axis=0)
 
@@ -336,8 +354,8 @@ def main():
 # --- Automatic Directory and Filename Creation ---
     # Algorithm mapping: mapping choice ID to descriptive names
     algo_names = {
-        1: "AE-QTS", 2: "QTS", 3: "QEA", 4: "GA", 5: "DE", 
-        6: "TS", 7: "PSO", 8: "WOA", 9: "ABC"
+        1: "AE-QTS", 2: "QTS", 3: "QEA", 4: "GA", 5: "DE",
+        6: "TS", 7: "PSO", 8: "WOA", 9: "ABC", 10: "AEQTS-STEP"
     }
     algo_name = algo_names.get(algo_choice, "Other")
     
@@ -398,11 +416,29 @@ def main():
         plt.close()
         print(f"[System] Entropy convergence plot saved to: {entropy_plot_path}")
 
+    elif algo_choice == 10:
+        # AEQTS-STEP has a single flat genome (not four layers), so one entropy line:
+        # the mean bit-entropy of the genome probability vector q, in [0, 1].
+        avg_step_entropy = np.nanmean(step_entropy_history_matrix, axis=0)
+
+        plt.figure()
+        plt.plot(iterations, avg_step_entropy, label='Genome (mean bit entropy)',
+                 color='black', linewidth=2.0)
+        plt.xlabel('Iteration')
+        plt.ylabel('Mean Normalized Bit Entropy (0-1)')
+        plt.ylim(-0.02, 1.02)
+        plt.title(f'{algo_name} Genome Entropy Convergence ({num_experiments} experiments)')
+        plt.legend()
+        entropy_plot_path = os.path.join(save_dir, f"{base_filename}_entropy_convergence.png")
+        plt.savefig(entropy_plot_path)
+        plt.close()
+        print(f"[System] Entropy convergence plot saved to: {entropy_plot_path}")
+
     # --- Generate Averaged Mode-Count Convergence Plot (AE-QTS & DE) ---
     # For each iteration, how many of the num_neighbors candidate solutions share
     # the single most-frequent score, averaged across all experiments. Rising
     # toward num_neighbors => population converging onto one score.
-    has_mode_data = algo_choice in (1, 5)
+    has_mode_data = algo_choice in (1, 5, 10)
     if has_mode_data:
         avg_mode_count = np.nanmean(mode_count_history_matrix, axis=0)
 
@@ -481,6 +517,8 @@ def main():
                 build_history_df(entropy4_history_matrix).to_excel(writer, sheet_name='Entropy_Q4')
             if has_mode_data:
                 build_history_df(mode_count_history_matrix).to_excel(writer, sheet_name='Mode_Count')
+            if algo_choice == 10:
+                build_history_df(step_entropy_history_matrix).to_excel(writer, sheet_name='Entropy_Genome')
 
         # Console Feedback
         print(f"\n[System] Summary report saved to: {txt_path}")

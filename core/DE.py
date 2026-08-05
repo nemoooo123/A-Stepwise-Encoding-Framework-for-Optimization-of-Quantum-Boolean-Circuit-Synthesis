@@ -2,7 +2,6 @@ from utils.init_state import gen_nbrs, repair_sequence_logic
 from utils.topology import decode_and_synthesize, synthesize_route, verify_circuit_logic
 import numpy as np
 import random
-import copy
 import matplotlib.pyplot as plt
 def DE_run_single_experiment(
                 max_iterations ,
@@ -167,10 +166,12 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
     # Randomly select 3 unique indices (r1, r2, r3) 
     r_indices = np.random.choice(candidates, 3, replace=False)
 
-    # Deep copy parents to avoid memory reference issues (Data Integrity)
-    parent1_n1=copy.deepcopy(nbr1[r_indices[0]])
-    parent2_n1=copy.deepcopy(nbr1[r_indices[1]])
-    parent3_n1=copy.deepcopy(nbr1[r_indices[2]])
+    # Parents are only ever read below: mutation builds fresh lists element by
+    # element and never writes back into them, so they are bound by reference.
+    # (Deep-copying all twelve of them dominated DE's runtime.)
+    parent1_n1=nbr1[r_indices[0]]
+    parent2_n1=nbr1[r_indices[1]]
+    parent3_n1=nbr1[r_indices[2]]
 
     # --- Step 3: Layer 1 Mutation
     mutated_n1=[]
@@ -184,9 +185,9 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
     mutated_n1 = np.array(mutated_n1)
 
     # Layer 2 Mutation
-    parent1_n2=copy.deepcopy(nbr2[r_indices[0]])
-    parent2_n2=copy.deepcopy(nbr2[r_indices[1]])
-    parent3_n2=copy.deepcopy(nbr2[r_indices[2]])
+    parent1_n2=nbr2[r_indices[0]]
+    parent2_n2=nbr2[r_indices[1]]
+    parent3_n2=nbr2[r_indices[2]]
     
     mutated_n2 = []
     for i in range(len(parent1_n2)):
@@ -198,9 +199,9 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
         mutated_n2.append(row)
     
     #  Layer 3 Mutation 
-    parent1_n3=copy.deepcopy(nbr3[r_indices[0]])
-    parent2_n3=copy.deepcopy(nbr3[r_indices[1]])
-    parent3_n3=copy.deepcopy(nbr3[r_indices[2]])
+    parent1_n3=nbr3[r_indices[0]]
+    parent2_n3=nbr3[r_indices[1]]
+    parent3_n3=nbr3[r_indices[2]]
 
     mutated_n3=[]
     for i in range(len(parent1_n3)):
@@ -221,9 +222,9 @@ def mutation(nbr1, nbr2, nbr3, nbr4, num_bits, num_neighbors, index, CR,
         mutated_n3.append(tmp_1)
 
     # Layer 4 Mutation 
-    parent1_n4=copy.deepcopy(nbr4[r_indices[0]])
-    parent2_n4=copy.deepcopy(nbr4[r_indices[1]])
-    parent3_n4=copy.deepcopy(nbr4[r_indices[2]])
+    parent1_n4=nbr4[r_indices[0]]
+    parent2_n4=nbr4[r_indices[1]]
+    parent3_n4=nbr4[r_indices[2]]
 
     mutated_n4 = []
     for i in range(len(parent1_n4)):

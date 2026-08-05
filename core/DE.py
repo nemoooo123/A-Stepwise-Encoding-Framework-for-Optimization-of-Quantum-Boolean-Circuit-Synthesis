@@ -39,7 +39,7 @@ def DE_run_single_experiment(
         # Sort by unique gate count first, then total gate count as tiebreaker, both ascending
     # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
     #原始版本
-    sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
+    sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
     # Track the best solution within the current generation (local best)
     local_best_gate_count = sorted_metrics[0][0]
     local_best_idx = sorted_metrics[0][5]
@@ -68,7 +68,7 @@ def DE_run_single_experiment(
 
         # sorted_metrics = sorted(solution_metrics, key=lambda x: (x[0], x[1]))
         #原始版本
-        sorted_metrics = sorted(solution_metrics, key=lambda x: x[1])
+        sorted_metrics = sorted(solution_metrics, key=lambda x: x[4])
 
         # Diversity/convergence measure: among this generation's candidate solutions,
         # how many share the single most-frequent score (total gate count)?

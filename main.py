@@ -46,8 +46,8 @@ def main():
     # np.random.seed(random_seed)
 
     # Experimental Configuration
-    num_experiments = 25
-    max_iterations = 5000
+    num_experiments = 100
+    max_iterations = 1000
     num_neighbors = 10  # Population size (N)
     
     print(f"Starting {num_experiments} experiments, each with {max_iterations} iterations...")
@@ -344,7 +344,7 @@ def main():
     algo_name = algo_names.get(algo_choice, "Other")
     
     # Establish directory path structure (e.g., exp/13_bit/QEA_Results/)
-    save_dir = os.path.join("exp5000_4", f"{num_bits}_bit", f"{algo_name}_Results")
+    save_dir = os.path.join("exp", f"{num_bits}_bit", f"{algo_name}_Results")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     

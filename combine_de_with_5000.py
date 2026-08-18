@@ -175,7 +175,7 @@ def plot_de_only(de_data, save_path):
     for ax in axes.ravel()[len(bits):]:
         ax.axis("off")
 
-    fig.suptitle("DE Convergence — exp5000_1~4 merged (100 runs, 5000 generations)",
+    fig.suptitle("DE Convergence — exp_5000_1~4 merged (100 runs, 5000 generations)",
                  fontsize=14, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     fig.savefig(save_path, dpi=150)

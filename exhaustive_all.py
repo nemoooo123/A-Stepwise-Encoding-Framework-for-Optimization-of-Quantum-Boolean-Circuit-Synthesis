@@ -20,12 +20,14 @@
 
 用法
 ----
+  python exhaustive_all.py --run-all --jobs 12   # 最常用：一行跑完全部
   python exhaustive_all.py --list-tasks            # 列出 984 個代表元與空間大小
   python exhaustive_all.py --plan --parts-target N # 產生給 xargs 的工作清單
   python exhaustive_all.py --task 7                # 跑單一代表元
   python exhaustive_all.py --task 7 --part 0 --nparts 8
   python exhaustive_all.py --expand results.csv    # 把代表元結果展開回 40,320 題
-一般不用手動跑，用 run_exhaustive_3bit.sh。
+--run-all 用 Python 內建的 multiprocessing 並行，不需要 bash；
+run_exhaustive_3bit.sh 是等效的 bash 版（需要 Git Bash，WSL 的 bash 不行）。
 """
 import argparse
 import csv
@@ -302,6 +304,99 @@ def cmd_expand(tasks, merged, out):
     print(f"展開完成 -> {out}" + (f"（缺 {missing} 個 task）" if missing else ""))
 
 
+def _worker(job):
+    """一份工作 = 某個代表元的某個分片。已完成就跳過（可中斷續跑）。"""
+    task, rep, orbit, part, nparts, outdir = job
+    path = os.path.join(outdir, f"p_{task}_{part}_{nparts}.csv")
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        return task, part, 0, True
+
+    info = describe(list(rep))
+    if info["n_cycles"] == 0:
+        best, count, seen = 0, 1, 1
+    else:
+        blocks, total = build_plan(info)
+        lo = total * part // nparts
+        hi = total * (part + 1) // nparts
+        best, count, seen = evaluate_range(info, blocks, lo, hi)
+
+    row = [task, " ".join(map(str, rep)), orbit, info["n_cycles"],
+           part, nparts, "" if best is None else best, count, seen]
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(",".join(map(str, row)) + "\n")
+    os.replace(tmp, path)                      # 原子換檔，中斷不會留半截
+    return task, part, seen, False
+
+
+def cmd_run_all(tasks, jobs, parts_target, outroot):
+    """
+    不依賴 bash / PowerShell 的並行驅動：用 multiprocessing 動態配工，
+    跑完自動合併 -> 展開 -> 統計。
+    """
+    import multiprocessing as mp
+
+    parts_dir = os.path.join(outroot, "parts")
+    os.makedirs(parts_dir, exist_ok=True)
+
+    print(f"[1/5] 建立工作清單（{len(tasks)} 個等價類）", flush=True)
+    joblist = []
+    total_space = 0
+    for i, (rep, orb) in enumerate(tasks):
+        info = describe(list(rep))
+        sp = 1 if info["n_cycles"] == 0 else space_size(info, "canonical")
+        total_space += sp
+        nparts = max(1, -(-sp // parts_target))
+        for p in range(nparts):
+            joblist.append((sp // nparts, i, rep, len(orb), p, nparts))
+    joblist.sort(key=lambda r: -r[0])          # 大的先跑，尾巴才不會拖
+    joblist = [(i, rep, orb, p, np_, parts_dir)
+               for _, i, rep, orb, p, np_ in joblist]
+
+    done_already = sum(1 for j in joblist
+                       if os.path.exists(os.path.join(
+                           parts_dir, f"p_{j[0]}_{j[3]}_{j[4]}.csv")))
+    print(f"      {len(joblist):,} 份工作，總計 {total_space:,} 個解"
+          f"（已完成 {done_already:,} 份）", flush=True)
+
+    print(f"[2/5] 開跑，{jobs} 個並行", flush=True)
+    t0 = time.time()
+    finished = evals = skipped = 0
+    try:
+        with mp.Pool(jobs) as pool:
+            for task, part, seen, was_skip in pool.imap_unordered(
+                    _worker, joblist, chunksize=1):
+                finished += 1
+                evals += seen
+                skipped += 1 if was_skip else 0
+                if finished % 10 == 0 or finished == len(joblist):
+                    el = time.time() - t0
+                    rate = evals / el if el > 0 else 0
+                    pct = finished / len(joblist)
+                    eta = (el / pct - el) / 60 if pct > 0 else 0
+                    print(f"      {finished:,}/{len(joblist):,} 份"
+                          f"（{pct:6.1%}）  已評估 {evals:,}"
+                          f"  {rate:,.0f}/s  剩約 {eta:.0f} 分", flush=True)
+    except KeyboardInterrupt:
+        print("\n      [中斷] 已完成的分片都存好了，重跑同一行指令即可續跑")
+        return
+
+    print(f"      耗時 {(time.time() - t0) / 60:.1f} 分"
+          f"（跳過 {skipped:,} 份已完成的）", flush=True)
+
+    merged = os.path.join(outroot, "merged_984.csv")
+    allcsv = os.path.join(outroot, "all_40320.csv")
+    dist = os.path.join(outroot, "distribution.csv")
+
+    print("[3/5] 合併分片")
+    cmd_merge([parts_dir], merged)
+    print("[4/5] 展開回 40,320 題")
+    cmd_expand(tasks, merged, allcsv)
+    print("[5/5] 統計分佈與總和")
+    cmd_summary(allcsv, dist)
+    print(f"\n結果在 {outroot}/")
+
+
 def cmd_summary(path, out):
     """統計 40,320 題的窮舉最佳解分佈與總和。"""
     gates, rows = Counter(), 0
@@ -366,11 +461,23 @@ def main():
     ap.add_argument("--merge", nargs="+")
     ap.add_argument("--expand")
     ap.add_argument("--summary")
+    ap.add_argument("--run-all", action="store_true",
+                    help="不用 bash，直接用 multiprocessing 跑完全部並統計")
+    ap.add_argument("--jobs", type=int, default=os.cpu_count(),
+                    help="並行數，預設 = CPU 核心數")
+    ap.add_argument("--outdir", default="Exhaustive_3bit_all")
+    ap.add_argument("--limit-tasks", type=int, default=0,
+                    help="只跑前 N 個等價類，用來試跑")
     args = ap.parse_args()
 
     tasks = all_tasks()
+    if args.limit_tasks:
+        tasks = tasks[:args.limit_tasks]
+        print(f"[試跑] 只用前 {len(tasks)} 個等價類", file=sys.stderr)
 
-    if args.list_tasks:
+    if args.run_all:
+        cmd_run_all(tasks, args.jobs, args.parts_target, args.outdir)
+    elif args.list_tasks:
         cmd_list_tasks(tasks)
     elif args.plan:
         cmd_plan(tasks, args.parts_target)
@@ -383,7 +490,7 @@ def main():
     elif args.task is not None:
         cmd_task(tasks, args.task, args.part, args.nparts, args.out)
     else:
-        ap.error("要指定 --list-tasks / --plan / --task / --merge / --expand / --summary")
+        ap.error("要指定 --run-all / --list-tasks / --plan / --task / --merge / --expand / --summary")
 
 
 if __name__ == "__main__":

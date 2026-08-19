@@ -1,5 +1,11 @@
 import numpy as np
+import os
 import random
+
+from utils.gate_commute import simplify_commuting
+
+# 交換律化簡預設關閉，避免動到既有實驗數據；設 COMMUTE_SIMPLIFY=1 開啟。
+ENABLE_COMMUTE_SIMPLIFY = os.environ.get("COMMUTE_SIMPLIFY", "0") not in ("0", "", "false", "False")
 import copy
 import time
 from utils.init_state import hamming_distance
@@ -745,7 +751,14 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
                 optimized_gate_list.append(current_gate)
                 bouns_fitness += bouns_tmp**2
                 bouns_tmp = 0
-    
+
+    # Step 4: Commutation-aware cancellation (opt-in via COMMUTE_SIMPLIFY=1).
+    # Step 3 only removes gates that are already adjacent. Two identical gates
+    # separated by gates that all commute with them can also be brought together
+    # and cancelled; see utils/gate_commute.py for the exact condition.
+    if ENABLE_COMMUTE_SIMPLIFY:
+        optimized_gate_list = simplify_commuting(optimized_gate_list)
+
     return optimized_gate_list, bouns_fitness
 
 def verify_circuit_logic(optimized_gates, num_bits, target_truth_table):

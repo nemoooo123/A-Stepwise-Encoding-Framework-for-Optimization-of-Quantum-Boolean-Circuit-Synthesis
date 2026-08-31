@@ -28,7 +28,14 @@ def QTS_run_single_experiment(max_iterations,
     current_iter = 0
     global_best_gate_count = float('inf')
     global_best_circuit = []
-    
+
+    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = gen_nbrs(
+        qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
+    )
+    decode_and_synthesize(
+        _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
+    )
+
     # --- QTS Main Evolution Loop ---
     while current_iter < max_iterations:
         current_iter += 1

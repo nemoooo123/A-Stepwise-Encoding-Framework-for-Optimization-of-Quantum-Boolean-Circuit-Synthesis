@@ -78,20 +78,21 @@ def GA_run_single_experiment(
 def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, pc, pm,
                            encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory):
     """
-    Execution of single generation GA logic: Elitism -> Selection -> Crossover -> Mutation -> Evaluation.
+    Execution of single generation GA logic: Selection -> Crossover -> Mutation -> Evaluation -> Elitist Truncation.
+    Generates a full num_neighbors offspring (one fitness evaluation each) so every generation
+    spends exactly num_neighbors evaluations, then merges the previous elite back in and keeps
+    the best num_neighbors survivors (11-in / 10-out replacement) without re-evaluating it.
     """
     new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit = [], [], [], [], [], []
 
-    # Elitism: Ensure the strongest individual persists into the next generation
     best_in_current_idx = np.argmin(local_fitness)
-    new_nbr1.append(copy.deepcopy(nbr1[best_in_current_idx]))
-    new_nbr2.append(copy.deepcopy(nbr2[best_in_current_idx]))
-    new_nbr3.append(copy.deepcopy(nbr3[best_in_current_idx]))
-    new_nbr4.append(copy.deepcopy(nbr4[best_in_current_idx]))
-    new_fit.append(local_fitness[best_in_current_idx])
-    new_circuit.append(local_best_circuit)
+    elite = (
+        copy.deepcopy(nbr1[best_in_current_idx]), copy.deepcopy(nbr2[best_in_current_idx]),
+        copy.deepcopy(nbr3[best_in_current_idx]), copy.deepcopy(nbr4[best_in_current_idx]),
+        local_fitness[best_in_current_idx], local_best_circuit
+    )
 
-    # Generate offspring until population size is reached
+    # Generate and evaluate a full new generation (num_neighbors offspring)
     while len(new_fit) < num_neighbors:
         # Parent Selection via Tournament Selection
         p1_idx = tournament_selection(local_fitness, local_indices, k)
@@ -123,6 +124,23 @@ def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, p
         new_nbr4.append(c4)
         new_circuit.append(circuit_solutions[0][0])
         new_fit.append(fit)
+
+    # Elitist truncation: merge the previous elite back in (11 candidates) and keep the best
+    # num_neighbors without spending an extra evaluation on it (its fitness is already known)
+    new_nbr1.append(elite[0])
+    new_nbr2.append(elite[1])
+    new_nbr3.append(elite[2])
+    new_nbr4.append(elite[3])
+    new_fit.append(elite[4])
+    new_circuit.append(elite[5])
+
+    survivors = np.argsort(new_fit)[:num_neighbors]
+    new_nbr1 = [new_nbr1[i] for i in survivors]
+    new_nbr2 = [new_nbr2[i] for i in survivors]
+    new_nbr3 = [new_nbr3[i] for i in survivors]
+    new_nbr4 = [new_nbr4[i] for i in survivors]
+    new_fit = [new_fit[i] for i in survivors]
+    new_circuit = [new_circuit[i] for i in survivors]
 
     return new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit
 

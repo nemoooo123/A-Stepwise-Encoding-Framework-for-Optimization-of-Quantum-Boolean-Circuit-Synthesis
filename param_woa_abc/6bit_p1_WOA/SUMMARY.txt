@@ -1,0 +1,17 @@
+WOA parameter sweep (b only, N=10 fixed) | 6-bit problem #1
+100 trials x 3000 iterations per config
+Total wall time: 27.1 min
+
+       config   b  num_neighbors  final_avg_gates  final_std  best_gates  worst_gates  median_gates  avg_time_s
+C01_b0.50_N10 0.5             10           218.04      5.953         200          234         218.0       43.78
+C02_b0.80_N10 0.8             10           222.22      4.832         210          240         222.0       45.04
+C03_b1.00_N10 1.0             10           226.66      4.205         218          238         226.0       45.20
+C04_b1.20_N10 1.2             10           228.24      4.338         216          238         228.0       45.18
+C05_b1.50_N10 1.5             10           232.72      4.094         220          246         232.0       45.49
+C06_b1.80_N10 1.8             10           235.28      3.945         222          246         236.0       45.41
+C07_b2.00_N10 2.0             10           235.76      3.513         226          244         236.0       45.34
+C08_b2.50_N10 2.5             10           238.22      3.497         230          246         238.0       45.53
+C09_b3.00_N10 3.0             10           239.38      3.552         228          250         240.0       45.53
+C10_b4.00_N10 4.0             10           242.58      3.713         228          252         243.0       44.46
+
+Ranked by mean gate count at the final generation (lower is better).

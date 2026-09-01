@@ -7,7 +7,8 @@ from utils.topology import decode_and_synthesize, verify_circuit_logic
 def WOA_run_single_experiment(max_iterations, rotation_cycles, num_neighbors, num_bits,
                                 base_trajectory, experiment_id, encoding_table,
                                 pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4,
-                                fitness_history_matrix, target_output, b):
+                                fitness_history_matrix, target_output, b,
+                                a_start=2.0, a_end=0.0, a_decay_power=1.0):
     
     """
     Executes a single experiment using the Whale Optimization Algorithm (WOA).
@@ -34,9 +35,13 @@ def WOA_run_single_experiment(max_iterations, rotation_cycles, num_neighbors, nu
     while current_iter < max_iterations:
         current_iter += 1
         
-        # Linear convergence factor 'a' decreases from 2 to 0
-        # This controls the exploration and exploitation range of A
-        a = 2 - current_iter * (2 / max_iterations)
+        # Convergence factor 'a' decays from a_start to a_end over the run,
+        # controlling the exploration/exploitation range of A. a_decay_power=1
+        # is the classic linear schedule (default, matches the original WOA
+        # paper); >1 lingers near a_start longer (more exploration up front),
+        # <1 drops toward a_end sooner (more exploitation up front).
+        progress = current_iter / max_iterations
+        a = a_end + (a_start - a_end) * (1 - progress) ** a_decay_power
         for i in range(num_neighbors):
             p = random.random()  # Decision variable for Bubble-net (Spiral) or Encircling/Search strategy
             r = random.random()

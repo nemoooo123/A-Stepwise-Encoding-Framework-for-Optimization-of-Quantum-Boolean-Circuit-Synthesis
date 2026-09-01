@@ -132,7 +132,7 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                delta_theta = 0.002  # Rotation step size for QEA state updates
+                delta_theta = 0.0005  # Rotation step size for QEA state updates
             )
 
         elif algo_choice == 4: # GA (Genetic Algorithm)
@@ -153,9 +153,9 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                k=3, 
-                pc=0.82, # crossover
-                pm=0.025 # mutation
+                k=5,
+                pc=0.8, # crossover
+                pm=0.005 # mutation
 
             )
         elif algo_choice == 5: # DE (Differential Evolution - A population-based stochastic global optimizer)
@@ -176,7 +176,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                CR = 0.05,
+                CR = 0.01,
             )
         
         elif algo_choice == 6: # TS (Tubu Search) 
@@ -196,7 +196,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                tabu_size = 55
+                tabu_size = 45
             )
 
         elif algo_choice == 7: # PSO (Particle Swarm Optimization)
@@ -237,7 +237,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                b = 1.2  # Spiral Constant
+                b = 0.45  # Spiral Constant
             )
 
         elif algo_choice == 9: # ABC(Artificial Bee Colony Algorithm)
@@ -258,7 +258,7 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                limit = 25
+                limit = 40
             )
 
         

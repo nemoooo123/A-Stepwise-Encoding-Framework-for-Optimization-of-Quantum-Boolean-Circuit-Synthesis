@@ -618,11 +618,90 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
 
     return state_route
 
+def _gates_commute(gate_a, gate_b):
+    """
+    Determines whether two gates (each a length-num_bits list, exactly one entry of
+    which is 3 marking the target bit, the rest being the exact 0/1 control pattern)
+    commute - i.e. whether swapping their order leaves the circuit's overall function
+    unchanged.
+
+    Every gate here is a single hypercube edge: it acts on exactly the two vertices that
+    match its control pattern (the target bit free, everything else pinned), and is the
+    identity everywhere else - so as a permutation of the state space, a gate is exactly
+    the transposition of that edge's two endpoints. Two transpositions commute iff they
+    share no point, i.e. the two edges don't touch on the hypercube ("not adjacent"):
+
+    - Same target bit: the edges run along the same dimension, so they either coincide
+      (identical gate) or never share a vertex - either way they commute.
+    - Different target bits: the edges can only meet at the single vertex fixed by
+      taking each gate's control value at the other's target position. That shared
+      vertex exists exactly when the two control patterns agree at every position other
+      than the two targets - so they commute iff the patterns disagree somewhere else.
+    """
+    target_a = gate_a.index(3)
+    target_b = gate_b.index(3)
+    if target_a == target_b:
+        return True
+    for k in range(len(gate_a)):
+        if k == target_a or k == target_b:
+            continue
+        if gate_a[k] != gate_b[k]:
+            return True
+    return False
+
+
+def _apply_moving_rule(gate_list):
+    """
+    MR (Moving Rule): in reversible-circuit optimization, a gate is free to slide past
+    any run of gates it commutes with (per `_gates_commute`) without changing the
+    circuit's output, since those edges never "touch" on the hypercube. This is used to
+    bubble a gate next to an identical one it would otherwise be separated from, so the
+    existing Deletion Rule (two adjacent identical gates cancel) gets a chance to fire.
+    Deletion and Moving are alternated to a fixed point, since each cancellation can
+    expose new adjacencies (and shrink the list a moving pass can search).
+    """
+    changed = True
+    while changed:
+        changed = False
+
+        # Deletion Rule: collapse any adjacent identical pair (A * A = I).
+        i = 0
+        while i < len(gate_list) - 1:
+            if gate_list[i] == gate_list[i + 1]:
+                del gate_list[i:i + 2]
+                changed = True
+                i = max(i - 1, 0)
+            else:
+                i += 1
+
+        # Moving Rule: for each gate, look ahead through the commuting run that follows
+        # it; if an identical gate is found before a non-commuting one blocks the way,
+        # bubble it back to sit right after the first gate.
+        i = 0
+        while i < len(gate_list):
+            target = gate_list[i]
+            j = i + 1
+            while j < len(gate_list):
+                if gate_list[j] == target:
+                    for m in range(j, i, -1):
+                        gate_list[m], gate_list[m - 1] = gate_list[m - 1], gate_list[m]
+                    changed = True
+                    break
+                if not _gates_commute(target, gate_list[j]):
+                    break
+                j += 1
+            i += 1
+
+    return gate_list
+
+
 def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, num_bits):
     """
     Synthesizes a reversible logic circuit from state trajectories and gate transition sequences.
-    Implements real-time gate cancellation (Identity Law: A * A = I) to minimize circuit depth.
-    
+    Implements real-time gate cancellation (Identity Law: A * A = I) to minimize circuit depth,
+    followed by the Moving Rule (MR): gates are bubbled through commuting neighbors (hypercube
+    edges that don't touch) so cancellation can reach pairs the single forward pass misses.
+
     Args:
         state_trajectories (list): List of decimal state sequences for each transition.
         transition_sequence_matrix (list): Matrix defining the order of bit-flips (0: head-start, 1: tail-start).
@@ -698,7 +777,12 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
                 optimized_gate_list.pop() # Remove redundant gate pair
             else:
                 optimized_gate_list.append(current_gate)
-    
+
+    # Step 4: Moving Rule (MR) - slide gates through commuting (non-adjacent-edge)
+    # neighbors to create further Deletion Rule opportunities the single left-to-right
+    # pass above couldn't see.
+    optimized_gate_list = _apply_moving_rule(optimized_gate_list)
+
     return optimized_gate_list
 
 def verify_circuit_logic(optimized_gates, num_bits, target_truth_table):

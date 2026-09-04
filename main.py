@@ -40,7 +40,7 @@ def main():
 
     # Experimental Configuration
     num_experiments = 100
-    max_iterations = 5000
+    max_iterations = 10000
     num_neighbors = 10  # Population size (N)
 
     print(f"Starting {num_experiments} experiments, each with {max_iterations} iterations...")

@@ -39,10 +39,10 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 10
+    num_experiments = 100
     max_iterations = 5000
     num_neighbors = 10  # Population size (N)
-    
+
     print(f"Starting {num_experiments} experiments, each with {max_iterations} iterations...")
 
     # Pre-allocate matrix for convergence analysis (Rows: Experiments, Cols: Generations)
@@ -87,7 +87,7 @@ def main():
                 target_output = target_output,
                 delta_theta = 0.01
             )
-            
+
         elif algo_choice == 2: # QTS (Quantum-Inspired Tabu Search)
             # Step 2: Initialize Quantum Individuals and Encoding Tables
             qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)

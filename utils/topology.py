@@ -5,11 +5,24 @@ import time
 from utils.init_state import hamming_distance
 
 
+def _bits_to_int(bits):
+    """
+    Decode a 0/1 bit sequence (MSB-first) into its decimal value. Equivalent to
+    `int(''.join(map(str, bits)), 2)` but skips building and parsing a string, since this
+    runs on the order of millions of times across a full search (once per decision per
+    neighbor per iteration).
+    """
+    val = 0
+    for b in bits:
+        val = (val << 1) | int(b)
+    return val
+
+
 def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories):
     """
-    Decodes hierarchical binary samples into decimal values and synthesizes 
+    Decodes hierarchical binary samples into decimal values and synthesizes
     quantum circuit routes for the entire population.
-    
+
     Args:
         pop_l1-l4: Binary samples for 4 layers.
         mapping_table: Constraint table for valid cycle lengths (encode_2_bit_table).
@@ -18,15 +31,15 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         trajectories: Database of transition paths (trans).
     """
     circuit_solutions = []
-    
+
     for i in range(pop_size):
         # Layer 1: Component priority decoding (Binary to Decimal)
-        decoded_l1 = [int(''.join(map(str, bits)), 2) for bits in pop_l1[i]]
-            
+        decoded_l1 = [_bits_to_int(bits) for bits in pop_l1[i]]
+
         # Layer 2: Entry point decoding with modulo constraint handling
         decoded_l2 = []
         for idx, bits in enumerate(pop_l2[i]):
-            val = int(''.join(map(str, bits)), 2)
+            val = _bits_to_int(bits)
             limit = mapping_table[idx]
             # Ensure the starting index is within the valid range of the cycle
             decoded_l2.append(val % limit if val >= limit else val)
@@ -40,13 +53,13 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
                     cycle_steps.append([999])
                 else:
                     # Convert each node bit-string to a decimal index
-                    cycle_steps.append([int(''.join(map(str, node)), 2) for node in step])
+                    cycle_steps.append([_bits_to_int(node) for node in step])
             decoded_l3.append(cycle_steps)
         
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3, 
+        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
                                           pop_l4[i], num_units, trajectories)
         
         # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
@@ -55,13 +68,13 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         
     return circuit_solutions
 
-def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories): 
+def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories):
     """
     Synthesizes the final execution route by resolving cycle sequences and inter-cycle dependencies.
-    
-    This function implements the physical instantiation phase of the synthesis framework, 
+
+    This function implements the physical instantiation phase of the synthesis framework,
     mapping optimized logical topologies into a sequence of executable state transitions.
-    
+
     Args:
         priority_weights (list): Layer 1 - Heuristic processing priorities for cycle scheduling.
         entry_points (list): Layer 2 - Starting state indices for each cycle sequence.
@@ -69,7 +82,7 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
         operation_sequences (list): Layer 4 - Sequence of logical operators (gates) associated with each step.
         num_units (int): System radix, representing the total number of processing elements (n-bits/qubits).
         trajectories (list): Pre-calculated database of valid state transition trajectories.
-        
+
     Returns:
         circuit: The fully assembled reversible circuit description.
     """
@@ -588,27 +601,21 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
         start_node = trajectory[step_idx]
         end_node = trajectory[step_idx + 1]
         state_route.append(start_node)
-        
-        # Step 2: Convert to bit arrays for manipulation
-        bit_array = [int(b) for b in bin(start_node)[2:].zfill(num_units)]
-        target_array = [int(b) for b in bin(end_node)[2:].zfill(num_units)]
-        
-        # Step 3: Identify the bit locations that require flipping (Hamming indices)
-        diff_locations = []
-        for i in range(len(bit_array)):
-            if bit_array[i] != target_array[i]:
-                diff_locations.append(i)
-        
-        # Step 4: Execute bit-flips following the optimized priority map
+
+        # Step 2/3: Identify the bit locations that require flipping (Hamming indices).
+        # XOR marks every differing bit at once, so this needs no bin()/zfill() bit-array
+        # construction (list index 0 = MSB, matching the old zfill-string convention).
+        diff = start_node ^ end_node
+        diff_locations = [i for i in range(num_units) if (diff >> (num_units - 1 - i)) & 1]
+
+        # Step 4: Execute bit-flips following the optimized priority map.
+        # XOR-toggling the running integer state avoids rebuilding a bit-array/string on
+        # every flip (this loop runs for every flip step of every transition).
+        current_state = start_node
         for flip_idx in priority_map:
             target_bit_pos = diff_locations[flip_idx]
-            # Perform bit-flip: 0 -> 1 or 1 -> 0
-            bit_array[target_bit_pos] =abs(1 - bit_array[target_bit_pos])
-            
-            # Convert modified bit array back to decimal state
-            binary_str = ''.join(map(str, bit_array))
-            decimal_state = int(binary_str, 2)
-            state_route.append(decimal_state)
+            current_state ^= (1 << (num_units - 1 - target_bit_pos))
+            state_route.append(current_state)
 
     else:
         # BYPASS CASE: Direct transition between start and end node
@@ -618,124 +625,81 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
 
     return state_route
 
-def _gates_commute(gate_a, gate_b):
+class _MRAccumulator:
     """
-    Determines whether two gates (each a length-num_bits list, exactly one entry of
-    which is 3 marking the target bit, the rest being the exact 0/1 control pattern)
-    commute - i.e. whether swapping their order leaves the circuit's overall function
-    unchanged.
+    Linear-time Deletion Rule (A*A=I) + Moving Rule (MR), replacing the old approach of
+    alternating a full deletion pass and a full "bubble through commuting neighbors" pass
+    to a fixed point (worst case O(passes * n^2)).
 
-    Every gate here is a single hypercube edge: it acts on exactly the two vertices that
-    match its control pattern (the target bit free, everything else pinned), and is the
-    identity everywhere else - so as a permutation of the state space, a gate is exactly
-    the transposition of that edge's two endpoints. Two transpositions commute iff they
-    share no point, i.e. the two edges don't touch on the hypercube ("not adjacent"):
-
-    - Same target bit: the edges run along the same dimension, so they either coincide
-      (identical gate) or never share a vertex - either way they commute.
-    - Different target bits: the edges can only meet at the single vertex fixed by
-      taking each gate's control value at the other's target position. That shared
-      vertex exists exactly when the two control patterns agree at every position other
-      than the two targets - so they commute iff the patterns disagree somewhere else.
+    Every gate is a hypercube edge with exactly two vertices (control pattern with its
+    target bit forced to 0, and to 1). For each incoming gate, this looks up - via a stack
+    of live-gate positions kept per vertex - the most recently emitted still-live gate
+    that touched either of its two vertices. Every gate strictly between that lookup and
+    now touched neither vertex (otherwise it, not this one, would be the "most recent"),
+    which means every one of them commutes with the incoming gate (edges that share no
+    vertex commute). So that lookup result is exactly the nearest gate the incoming one
+    cannot freely slide past: if it's the identical gate, the two cancel (A*A=I);
+    otherwise the incoming gate is simply recorded as newly live. This reaches the same
+    reduced circuit as the old fixed-point loop (trace-rewriting with an independence
+    relation has a confluent, order-independent normal form), but does it in a single
+    amortized O(1) step per gate. Ported from an independently-implemented, verified-fast
+    reference (學弟's `_MRAccumulator` in stepwise_encoding.py) into this codebase's
+    gate representation (length-num_bits 0/1/3 lists, plus a target-bit-shift and a
+    control-pattern integer per gate, as already used elsewhere in this module).
     """
-    target_a = gate_a.index(3)
-    target_b = gate_b.index(3)
-    if target_a == target_b:
-        return True
-    for k in range(len(gate_a)):
-        if k == target_a or k == target_b:
-            continue
-        if gate_a[k] != gate_b[k]:
-            return True
-    return False
 
+    __slots__ = ("gates", "targets", "ctrls", "vertex_stacks", "live")
 
-def _commute_fast(target_a, ctrl_a, target_b, ctrl_b, full_mask):
-    """
-    Same test as `_gates_commute`, but takes each gate pre-decomposed into its target-bit
-    index and a control-pattern integer (the state each gate's edge starts from - its
-    binary digits already equal that gate's 0/1 control values everywhere except the
-    target bit, which this function masks out anyway). Reduces the per-pair check from an
-    O(num_bits) Python loop plus two `list.index(3)` scans to a couple of int ops, since
-    this is called on the order of 10^5-10^7 times per circuit for larger bit counts.
-    """
-    if target_a == target_b:
-        return True
-    mask = full_mask & ~(1 << target_a) & ~(1 << target_b)
-    return ((ctrl_a ^ ctrl_b) & mask) != 0
+    def __init__(self):
+        self.gates = []          # cancelled slots become None, positions never reused
+        self.targets = []
+        self.ctrls = []          # control-pattern int, target bit already cleared to 0
+        self.vertex_stacks = {}  # vertex(int) -> stack of positions of live gates touching it
+        self.live = 0
 
+    def push(self, gate, target_shift, ctrl, full_mask):
+        base = ctrl & full_mask & ~(1 << target_shift)
+        v0 = base
+        v1 = base | (1 << target_shift)
 
-def _gates_equal_fast(target_a, ctrl_a, target_b, ctrl_b, full_mask):
-    """
-    Equivalent to `gate_a == gate_b` (list equality) given the same (target, ctrl) form
-    `_commute_fast` uses: two gates are identical iff they share a target bit and their
-    control patterns agree everywhere else (the shared target position is always 3 in
-    both, so it never affects equality). Replaces an O(num_bits) Python list comparison,
-    done tens of millions of times in `_apply_moving_rule`, with a couple of int ops.
-    """
-    if target_a != target_b:
-        return False
-    mask = full_mask & ~(1 << target_a)
-    return ((ctrl_a ^ ctrl_b) & mask) == 0
+        stack0 = self.vertex_stacks.get(v0)
+        if stack0 is None:
+            stack0 = self.vertex_stacks[v0] = []
+        stack1 = self.vertex_stacks.get(v1)
+        if stack1 is None:
+            stack1 = self.vertex_stacks[v1] = []
 
+        p0 = stack0[-1] if stack0 else -1
+        p1 = stack1[-1] if stack1 else -1
+        p = p0 if p0 > p1 else p1
 
-def _apply_moving_rule(gate_list, gate_targets, gate_ctrls, num_bits):
-    """
-    MR (Moving Rule): in reversible-circuit optimization, a gate is free to slide past
-    any run of gates it commutes with (per `_gates_commute`) without changing the
-    circuit's output, since those edges never "touch" on the hypercube. This is used to
-    bubble a gate next to an identical one it would otherwise be separated from, so the
-    existing Deletion Rule (two adjacent identical gates cancel) gets a chance to fire.
-    Deletion and Moving are alternated to a fixed point, since each cancellation can
-    expose new adjacencies (and shrink the list a moving pass can search).
+        # p shares a vertex with the incoming gate by construction. Only one edge per
+        # target dimension passes through a given vertex, so sharing a vertex AND a
+        # target bit forces it to be the exact same edge - no need to also compare ctrl.
+        if p >= 0 and self.targets[p] == target_shift:
+            self.gates[p] = None
+            self.targets[p] = None
+            self.ctrls[p] = None
+            stack0.pop()
+            stack1.pop()
+            self.live -= 1
+        else:
+            self.gates.append(gate)
+            self.targets.append(target_shift)
+            self.ctrls.append(base)
+            k = len(self.gates) - 1
+            stack0.append(k)
+            stack1.append(k)
+            self.live += 1
 
-    `gate_targets`/`gate_ctrls` are parallel arrays (same indices as `gate_list`) holding
-    each gate's target-bit index and control-pattern integer, kept in sync through every
-    deletion/swap so the hot commute/equality checks never have to recompute them or fall
-    back to an O(num_bits) list comparison.
-    """
-    full_mask = (1 << num_bits) - 1
-    changed = True
-    while changed:
-        changed = False
-
-        # Deletion Rule: collapse any adjacent identical pair (A * A = I).
-        i = 0
-        n = len(gate_list)
-        while i < n - 1:
-            if _gates_equal_fast(gate_targets[i], gate_ctrls[i], gate_targets[i + 1], gate_ctrls[i + 1], full_mask):
-                del gate_list[i:i + 2]
-                del gate_targets[i:i + 2]
-                del gate_ctrls[i:i + 2]
-                n -= 2
-                changed = True
-                i = max(i - 1, 0)
-            else:
-                i += 1
-
-        # Moving Rule: for each gate, look ahead through the commuting run that follows
-        # it; if an identical gate is found before a non-commuting one blocks the way,
-        # bubble it back to sit right after the first gate.
-        i = 0
-        n = len(gate_list)
-        while i < n:
-            t_target = gate_targets[i]
-            c_target = gate_ctrls[i]
-            j = i + 1
-            while j < n:
-                if _gates_equal_fast(t_target, c_target, gate_targets[j], gate_ctrls[j], full_mask):
-                    for m in range(j, i, -1):
-                        gate_list[m], gate_list[m - 1] = gate_list[m - 1], gate_list[m]
-                        gate_targets[m], gate_targets[m - 1] = gate_targets[m - 1], gate_targets[m]
-                        gate_ctrls[m], gate_ctrls[m - 1] = gate_ctrls[m - 1], gate_ctrls[m]
-                    changed = True
-                    break
-                if not _commute_fast(t_target, c_target, gate_targets[j], gate_ctrls[j], full_mask):
-                    break
-                j += 1
-            i += 1
-
-    return gate_list, gate_targets, gate_ctrls
+    def result(self):
+        gates, targets, ctrls = [], [], []
+        for g, t, c in zip(self.gates, self.targets, self.ctrls):
+            if g is not None:
+                gates.append(g)
+                targets.append(t)
+                ctrls.append(c)
+        return gates, targets, ctrls
 
 
 def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, num_bits):
@@ -743,13 +707,13 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
     Synthesizes a reversible logic circuit from state trajectories and gate transition sequences.
     Implements real-time gate cancellation (Identity Law: A * A = I) to minimize circuit depth,
     followed by the Moving Rule (MR): gates are bubbled through commuting neighbors (hypercube
-    edges that don't touch) so cancellation can reach pairs the single forward pass misses.
+    edges that don't touch) so cancellation can reach pairs a plain adjacent-only pass misses.
 
     Args:
         state_trajectories (list): List of decimal state sequences for each transition.
         transition_sequence_matrix (list): Matrix defining the order of bit-flips (0: head-start, 1: tail-start).
         num_bits (int): Total number of bits in the system.
-        
+
     Returns:
         tuple: (optimized_gate_list, total_raw_transitions)
     """
@@ -794,14 +758,11 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
 
     # Step 2: Map Bit Transitions to Reversible Gates and Apply Optimization
     # Gate Encoding: 0/1 = Control Bits, 3 = Target Bit (Flip)
-    optimized_gate_list = []
-    # Parallel arrays for the Moving Rule below: each gate's target-bit index, and a
-    # control-pattern integer. A gate's edge runs between state_start and state_end, which
-    # differ only at the target bit - so state_start's binary digits already agree with
-    # this gate's 0/1 controls everywhere except the target, which comparisons mask out
-    # anyway. Reusing it avoids ever re-deriving control bits from the gate list later.
-    gate_targets = []
-    gate_ctrls = []
+    # Step 3/4: Cancellation (A*A=I) + Moving Rule, done in one O(1)-amortized step per
+    # gate via the vertex-indexed accumulator instead of a separate peephole pass plus
+    # repeated O(n) fixed-point rescans.
+    full_mask = (1 << num_bits) - 1
+    acc = _MRAccumulator()
 
     for transition in raw_step_transitions:
         state_start, state_end = transition[0], transition[1]
@@ -822,28 +783,11 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
                 # to integer bit weight 2**(num_bits-1-bit_idx), not 2**bit_idx.
                 target_shift = num_bits - 1 - bit_idx
 
-        # Step 3: Peephole Optimization (Gate Cancellation)
-        # In reversible logic, consecutive identical gates cancel out.
-        if not optimized_gate_list:
-            optimized_gate_list.append(current_gate)
-            gate_targets.append(target_shift)
-            gate_ctrls.append(state_start)
-        else:
-            if optimized_gate_list[-1] == current_gate:
-                optimized_gate_list.pop() # Remove redundant gate pair
-                gate_targets.pop()
-                gate_ctrls.pop()
-            else:
-                optimized_gate_list.append(current_gate)
-                gate_targets.append(target_shift)
-                gate_ctrls.append(state_start)
+        # state_start's binary digits already agree with this gate's 0/1 controls
+        # everywhere except the target bit, which _MRAccumulator masks out anyway.
+        acc.push(current_gate, target_shift, state_start, full_mask)
 
-    # Step 4: Moving Rule (MR) - slide gates through commuting (non-adjacent-edge)
-    # neighbors to create further Deletion Rule opportunities the single left-to-right
-    # pass above couldn't see.
-    optimized_gate_list, gate_targets, gate_ctrls = _apply_moving_rule(
-        optimized_gate_list, gate_targets, gate_ctrls, num_bits
-    )
+    optimized_gate_list, gate_targets, gate_ctrls = acc.result()
 
     return optimized_gate_list
 

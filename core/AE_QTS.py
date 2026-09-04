@@ -15,14 +15,14 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  qindividuals2, 
                                  qindividuals3, 
                                  qindividuals4, 
-                                 fitness_history_matrix, 
+                                 fitness_history_matrix,
                                  target_output,
                                  delta_theta):
     """
     Executes a single trial of the AE-QTS algorithm.
     Iteratively updates quantum individuals (qindividuals1-4) to minimize circuit gate count.
     """
-    
+
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
@@ -37,7 +37,7 @@ def AE_QTS_run_single_experiment(max_iterations,
 
     while current_iter < max_iterations:
         current_iter += 1
-        
+
         # Step 1: Neighborhood Generation
         # Create candidate solutions (neighbors) based on the current quantum state of qindividuals
         nbr1, nbr2, nbr3, nbr4 = gen_nbrs(
@@ -107,8 +107,10 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
 
         # --- Update qindividuals1 (Strategy/Trajectory level) ---
         # best_sol1 and worst_sol1 represent the discrete decisions made by the neighbors
-        best_sol1 = [list(map(int, row)) for row in nbr1[best_idx].tolist()]
-        worst_sol1 = [list(map(int, row)) for row in nbr1[worst_idx].tolist()]
+        # nbr1 is an int64 ndarray, so .tolist() already yields native Python ints -
+        # the extra list(map(int, row)) below was re-wrapping values that were already ints.
+        best_sol1 = nbr1[best_idx].tolist()
+        worst_sol1 = nbr1[worst_idx].tolist()
 
         for i in range(len(qindividuals1)):
             for j in range(len(qindividuals1[i])):

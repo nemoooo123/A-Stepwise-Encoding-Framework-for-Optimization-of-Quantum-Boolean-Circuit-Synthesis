@@ -650,7 +650,36 @@ def _gates_commute(gate_a, gate_b):
     return False
 
 
-def _apply_moving_rule(gate_list):
+def _commute_fast(target_a, ctrl_a, target_b, ctrl_b, full_mask):
+    """
+    Same test as `_gates_commute`, but takes each gate pre-decomposed into its target-bit
+    index and a control-pattern integer (the state each gate's edge starts from - its
+    binary digits already equal that gate's 0/1 control values everywhere except the
+    target bit, which this function masks out anyway). Reduces the per-pair check from an
+    O(num_bits) Python loop plus two `list.index(3)` scans to a couple of int ops, since
+    this is called on the order of 10^5-10^7 times per circuit for larger bit counts.
+    """
+    if target_a == target_b:
+        return True
+    mask = full_mask & ~(1 << target_a) & ~(1 << target_b)
+    return ((ctrl_a ^ ctrl_b) & mask) != 0
+
+
+def _gates_equal_fast(target_a, ctrl_a, target_b, ctrl_b, full_mask):
+    """
+    Equivalent to `gate_a == gate_b` (list equality) given the same (target, ctrl) form
+    `_commute_fast` uses: two gates are identical iff they share a target bit and their
+    control patterns agree everywhere else (the shared target position is always 3 in
+    both, so it never affects equality). Replaces an O(num_bits) Python list comparison,
+    done tens of millions of times in `_apply_moving_rule`, with a couple of int ops.
+    """
+    if target_a != target_b:
+        return False
+    mask = full_mask & ~(1 << target_a)
+    return ((ctrl_a ^ ctrl_b) & mask) == 0
+
+
+def _apply_moving_rule(gate_list, gate_targets, gate_ctrls, num_bits):
     """
     MR (Moving Rule): in reversible-circuit optimization, a gate is free to slide past
     any run of gates it commutes with (per `_gates_commute`) without changing the
@@ -659,16 +688,26 @@ def _apply_moving_rule(gate_list):
     existing Deletion Rule (two adjacent identical gates cancel) gets a chance to fire.
     Deletion and Moving are alternated to a fixed point, since each cancellation can
     expose new adjacencies (and shrink the list a moving pass can search).
+
+    `gate_targets`/`gate_ctrls` are parallel arrays (same indices as `gate_list`) holding
+    each gate's target-bit index and control-pattern integer, kept in sync through every
+    deletion/swap so the hot commute/equality checks never have to recompute them or fall
+    back to an O(num_bits) list comparison.
     """
+    full_mask = (1 << num_bits) - 1
     changed = True
     while changed:
         changed = False
 
         # Deletion Rule: collapse any adjacent identical pair (A * A = I).
         i = 0
-        while i < len(gate_list) - 1:
-            if gate_list[i] == gate_list[i + 1]:
+        n = len(gate_list)
+        while i < n - 1:
+            if _gates_equal_fast(gate_targets[i], gate_ctrls[i], gate_targets[i + 1], gate_ctrls[i + 1], full_mask):
                 del gate_list[i:i + 2]
+                del gate_targets[i:i + 2]
+                del gate_ctrls[i:i + 2]
+                n -= 2
                 changed = True
                 i = max(i - 1, 0)
             else:
@@ -678,21 +717,25 @@ def _apply_moving_rule(gate_list):
         # it; if an identical gate is found before a non-commuting one blocks the way,
         # bubble it back to sit right after the first gate.
         i = 0
-        while i < len(gate_list):
-            target = gate_list[i]
+        n = len(gate_list)
+        while i < n:
+            t_target = gate_targets[i]
+            c_target = gate_ctrls[i]
             j = i + 1
-            while j < len(gate_list):
-                if gate_list[j] == target:
+            while j < n:
+                if _gates_equal_fast(t_target, c_target, gate_targets[j], gate_ctrls[j], full_mask):
                     for m in range(j, i, -1):
                         gate_list[m], gate_list[m - 1] = gate_list[m - 1], gate_list[m]
+                        gate_targets[m], gate_targets[m - 1] = gate_targets[m - 1], gate_targets[m]
+                        gate_ctrls[m], gate_ctrls[m - 1] = gate_ctrls[m - 1], gate_ctrls[m]
                     changed = True
                     break
-                if not _gates_commute(target, gate_list[j]):
+                if not _commute_fast(t_target, c_target, gate_targets[j], gate_ctrls[j], full_mask):
                     break
                 j += 1
             i += 1
 
-    return gate_list
+    return gate_list, gate_targets, gate_ctrls
 
 
 def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, num_bits):
@@ -752,36 +795,55 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
     # Step 2: Map Bit Transitions to Reversible Gates and Apply Optimization
     # Gate Encoding: 0/1 = Control Bits, 3 = Target Bit (Flip)
     optimized_gate_list = []
-    
+    # Parallel arrays for the Moving Rule below: each gate's target-bit index, and a
+    # control-pattern integer. A gate's edge runs between state_start and state_end, which
+    # differ only at the target bit - so state_start's binary digits already agree with
+    # this gate's 0/1 controls everywhere except the target, which comparisons mask out
+    # anyway. Reusing it avoids ever re-deriving control bits from the gate list later.
+    gate_targets = []
+    gate_ctrls = []
+
     for transition in raw_step_transitions:
         state_start, state_end = transition[0], transition[1]
-        
+
         # Convert decimal states to binary bit arrays
         bits_start = [int(b) for b in bin(state_start)[2:].zfill(num_bits)]
         bits_end = [int(b) for b in bin(state_end)[2:].zfill(num_bits)]
-        
+
         current_gate = []
+        target_shift = -1
         for bit_idx in range(num_bits):
             # Identical bits denote a Control condition; differing bits denote the Target
             if bits_start[bit_idx] == bits_end[bit_idx]:
                 current_gate.append(bits_start[bit_idx])
             else:
                 current_gate.append(3)
-        
+                # zfill()/bin() strings are MSB-first, so list position bit_idx corresponds
+                # to integer bit weight 2**(num_bits-1-bit_idx), not 2**bit_idx.
+                target_shift = num_bits - 1 - bit_idx
+
         # Step 3: Peephole Optimization (Gate Cancellation)
         # In reversible logic, consecutive identical gates cancel out.
         if not optimized_gate_list:
             optimized_gate_list.append(current_gate)
+            gate_targets.append(target_shift)
+            gate_ctrls.append(state_start)
         else:
             if optimized_gate_list[-1] == current_gate:
                 optimized_gate_list.pop() # Remove redundant gate pair
+                gate_targets.pop()
+                gate_ctrls.pop()
             else:
                 optimized_gate_list.append(current_gate)
+                gate_targets.append(target_shift)
+                gate_ctrls.append(state_start)
 
     # Step 4: Moving Rule (MR) - slide gates through commuting (non-adjacent-edge)
     # neighbors to create further Deletion Rule opportunities the single left-to-right
     # pass above couldn't see.
-    optimized_gate_list = _apply_moving_rule(optimized_gate_list)
+    optimized_gate_list, gate_targets, gate_ctrls = _apply_moving_rule(
+        optimized_gate_list, gate_targets, gate_ctrls, num_bits
+    )
 
     return optimized_gate_list
 

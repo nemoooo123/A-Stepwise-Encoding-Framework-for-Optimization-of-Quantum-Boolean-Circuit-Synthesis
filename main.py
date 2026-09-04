@@ -39,7 +39,7 @@ def main():
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 100
+    num_experiments = 10
     max_iterations = 5000
     num_neighbors = 10  # Population size (N)
     

@@ -24,8 +24,12 @@ PROBLEMS = [
     (4, 5, "4b15g_3"),
     (4, 6, "4b15g_4"),
     (4, 7, "4b15g_5"),
+    (4, 8, "nth_prime4_inc"),
     (5, 6, "nth_prime5_inc"),
     (5, 7, "hwb5"),
+    (6, 6, "permanent2x2"),
+    (6, 7, "nth_prime6_inc"),
+    (6, 8, "hwb6"),
 ]
 
 NUM_EXPERIMENTS = 100

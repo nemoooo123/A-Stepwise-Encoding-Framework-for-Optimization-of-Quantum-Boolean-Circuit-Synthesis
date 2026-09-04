@@ -211,7 +211,7 @@ def sample_layer_L1(prob_matrices):
         # Iterate through each bit in the current cycle's probability matrix
         for bit_idx in range(len(prob_matrices[cycle_idx])): 
             # Generate a random float between 0 and 1 for stochastic sampling
-            random_threshold = np.random.rand(1)
+            random_threshold = random.random()
             
             # Compare the stored probability against the random threshold
             # If the probability of state 0 is less than the threshold, select state 1
@@ -243,7 +243,7 @@ def sample_layer_L2(prob_matrices_L2):
         # Iterate through each bit's probability distribution 
         for bit_prob in prob_matrices_L2[cycle_idx]:
             # Generate a stochastic threshold for binary sampling
-            random_threshold = np.random.rand(1)
+            random_threshold = random.random()
             
             # Binary selection based on the probability of state 0
             if bit_prob[0] < random_threshold:
@@ -286,7 +286,7 @@ def sample_layer_L3(prob_matrices_L3):
                 else:
                     # Perform bit-wise stochastic sampling for the intermediate node
                     for bit_prob in substep_matrix:
-                        random_threshold = np.random.rand(1)
+                        random_threshold = random.random()
                         
                         if bit_prob[0] < random_threshold:
                             binary_node.append(1)
@@ -324,7 +324,7 @@ def sample_layer_L4(prob_matrices_L4):
             # Iterate through the probability distribution for each sequencing decision
             for bit_idx in range(len(prob_matrices_L4[cycle_idx][step_idx])):
                 # Generate a random threshold for stochastic sampling
-                random_threshold = np.random.rand(1)
+                random_threshold = random.random()
                 
                 # prob_value: The specific probability for this sequencing bit
                 prob_value = prob_matrices_L4[cycle_idx][step_idx][bit_idx][0]

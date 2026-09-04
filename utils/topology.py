@@ -5,11 +5,24 @@ import time
 from utils.init_state import hamming_distance
 
 
+def _bits_to_int(bits):
+    """
+    Decode a 0/1 bit sequence (MSB-first) into its decimal value. Equivalent to
+    `int(''.join(map(str, bits)), 2)` but skips building and parsing a string, since this
+    runs on the order of millions of times across a full search (once per decision per
+    neighbor per iteration).
+    """
+    val = 0
+    for b in bits:
+        val = (val << 1) | int(b)
+    return val
+
+
 def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_units, pop_size, trajectories):
     """
-    Decodes hierarchical binary samples into decimal values and synthesizes 
+    Decodes hierarchical binary samples into decimal values and synthesizes
     quantum circuit routes for the entire population.
-    
+
     Args:
         pop_l1-l4: Binary samples for 4 layers.
         mapping_table: Constraint table for valid cycle lengths (encode_2_bit_table).
@@ -18,15 +31,15 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         trajectories: Database of transition paths (trans).
     """
     circuit_solutions = []
-    
+
     for i in range(pop_size):
         # Layer 1: Component priority decoding (Binary to Decimal)
-        decoded_l1 = [int(''.join(map(str, bits)), 2) for bits in pop_l1[i]]
-            
+        decoded_l1 = [_bits_to_int(bits) for bits in pop_l1[i]]
+
         # Layer 2: Entry point decoding with modulo constraint handling
         decoded_l2 = []
         for idx, bits in enumerate(pop_l2[i]):
-            val = int(''.join(map(str, bits)), 2)
+            val = _bits_to_int(bits)
             limit = mapping_table[idx]
             # Ensure the starting index is within the valid range of the cycle
             decoded_l2.append(val % limit if val >= limit else val)
@@ -40,7 +53,7 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
                     cycle_steps.append([999])
                 else:
                     # Convert each node bit-string to a decimal index
-                    cycle_steps.append([int(''.join(map(str, node)), 2) for node in step])
+                    cycle_steps.append([_bits_to_int(node) for node in step])
             decoded_l3.append(cycle_steps)
         
         # Synthesis: Transform decoded parameters into the final circuit structure
@@ -588,27 +601,21 @@ def generate_state_trajectory(step_idx, path_priorities, trajectory, num_units):
         start_node = trajectory[step_idx]
         end_node = trajectory[step_idx + 1]
         state_route.append(start_node)
-        
-        # Step 2: Convert to bit arrays for manipulation
-        bit_array = [int(b) for b in bin(start_node)[2:].zfill(num_units)]
-        target_array = [int(b) for b in bin(end_node)[2:].zfill(num_units)]
-        
-        # Step 3: Identify the bit locations that require flipping (Hamming indices)
-        diff_locations = []
-        for i in range(len(bit_array)):
-            if bit_array[i] != target_array[i]:
-                diff_locations.append(i)
-        
-        # Step 4: Execute bit-flips following the optimized priority map
+
+        # Step 2/3: Identify the bit locations that require flipping (Hamming indices).
+        # XOR marks every differing bit at once, so this needs no bin()/zfill() bit-array
+        # construction (list index 0 = MSB, matching the old zfill-string convention).
+        diff = start_node ^ end_node
+        diff_locations = [i for i in range(num_units) if (diff >> (num_units - 1 - i)) & 1]
+
+        # Step 4: Execute bit-flips following the optimized priority map.
+        # XOR-toggling the running integer state avoids rebuilding a bit-array/string on
+        # every flip (this loop runs for every flip step of every transition).
+        current_state = start_node
         for flip_idx in priority_map:
             target_bit_pos = diff_locations[flip_idx]
-            # Perform bit-flip: 0 -> 1 or 1 -> 0
-            bit_array[target_bit_pos] =abs(1 - bit_array[target_bit_pos])
-            
-            # Convert modified bit array back to decimal state
-            binary_str = ''.join(map(str, bit_array))
-            decimal_state = int(binary_str, 2)
-            state_route.append(decimal_state)
+            current_state ^= (1 << (num_units - 1 - target_bit_pos))
+            state_route.append(current_state)
 
     else:
         # BYPASS CASE: Direct transition between start and end node
@@ -676,19 +683,15 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
     
     for transition in raw_step_transitions:
         state_start, state_end = transition[0], transition[1]
-        
-        # Convert decimal states to binary bit arrays
-        bits_start = [int(b) for b in bin(state_start)[2:].zfill(num_bits)]
-        bits_end = [int(b) for b in bin(state_end)[2:].zfill(num_bits)]
-        
-        current_gate = []
-        for bit_idx in range(num_bits):
-            # Identical bits denote a Control condition; differing bits denote the Target
-            if bits_start[bit_idx] == bits_end[bit_idx]:
-                current_gate.append(bits_start[bit_idx])
-            else:
-                current_gate.append(3)
-        
+
+        # Every transition here is a single hypercube edge (exactly one differing bit),
+        # so XOR pinpoints the target bit directly - no need to build a second bit-array
+        # for state_end or compare it element-by-element against state_start's.
+        target_shift = (state_start ^ state_end).bit_length() - 1
+        target_idx = num_bits - 1 - target_shift
+        current_gate = [(state_start >> (num_bits - 1 - k)) & 1 for k in range(num_bits)]
+        current_gate[target_idx] = 3
+
         # Step 3: Peephole Optimization (Gate Cancellation)
         # In reversible logic, consecutive identical gates cancel out.
         if not optimized_gate_list:

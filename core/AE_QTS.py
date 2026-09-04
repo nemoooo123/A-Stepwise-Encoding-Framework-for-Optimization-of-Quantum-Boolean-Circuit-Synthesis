@@ -106,9 +106,11 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
         worst_idx = sorted_indices[num_neighbors - 1 - t]
 
         # --- Update qindividuals1 (Strategy/Trajectory level) ---
-        # best_sol1 and worst_sol1 represent the discrete decisions made by the neighbors
-        best_sol1 = [list(map(int, row)) for row in nbr1[best_idx].tolist()]
-        worst_sol1 = [list(map(int, row)) for row in nbr1[worst_idx].tolist()]
+        # best_sol1 and worst_sol1 represent the discrete decisions made by the neighbors.
+        # nbr1 is an int64 ndarray, so .tolist() already yields native Python ints -
+        # the extra list(map(int, row)) below was re-wrapping values that were already ints.
+        best_sol1 = nbr1[best_idx].tolist()
+        worst_sol1 = nbr1[worst_idx].tolist()
 
         for i in range(len(qindividuals1)):
             for j in range(len(qindividuals1[i])):

@@ -86,18 +86,18 @@ def AE_QTS_run_single_experiment(max_iterations,
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
 def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
-                               num_neighbors, nbr1, nbr2, nbr3, nbr4,
+                               num_neighbors, nbr1, nbr2, nbr3, nbr4, 
                                sorted_indices, num_cycles, delta_theta):
     """
-    Updates the probability distributions of quantum populations (q1-q4) based on
-    the relative fitness of their neighbors.
+    Updates the probability distributions of quantum populations (q1-q4) based on 
+    the relative fitness of their neighbors. 
     Uses a 'best-vs-worst' strategy to shift probability amplitudes.
     """
-
+    
     # Process the top half of the population (Best half pulls away from Worst half)
     t = 0
     limit = int(num_neighbors / 2)
-
+    
     while t < limit:
         # Step 1: Identify Best and Worst neighbor pairs
         # best_idx: index of the t-th best neighbor
@@ -120,7 +120,7 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                     # Increment probability of the 'best' decision, decrement the 'worst'
                     qindividuals1[i][j][b_val] += delta_theta/(t+1)
                     qindividuals1[i][j][w_val] -= delta_theta/(t+1)
-
+                    
                     # Boundary Correction: Ensure probabilities stay within [0, 1]
                     if qindividuals1[i][j][w_val] <= 0:
                         qindividuals1[i][j][b_val] = 1.0
@@ -176,3 +176,6 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                 qindividuals4[i][j][k][b_gate] = 1.0
                                 qindividuals4[i][j][k][w_gate] = 0.0
         t += 1
+
+          
+   

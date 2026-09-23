@@ -2,6 +2,7 @@ import numpy as np
 import time
 import pandas as pd
 import os
+import copy
 from utils.data_loader import DataLoader
 from utils.init_state import find_cycles, build_encode
 from core.AE_QTS import AE_QTS_run_single_experiment
@@ -24,24 +25,38 @@ def main():
     # User Input Section
     try:
         num_bits = int(input("Enter number of bits (n): "))
-        problem_idx = int(input("Enter problem index: "))
+        problem_idx = int(input("Enter problem index (0 = load a custom sparse truth table file): "))
         algo_choice = int(input("Select Algorithm (1: AE-QTS, 2: QTS, 3: QEA, 4: GA, 5: DE, 6: TS, 7: PSO, 8: WOA, 9: ABC): "))
     except ValueError:
         print("Invalid input. Please enter numeric values.")
         return
 
     # Load the target truth table (output)
-    target_output = loader.get_output(num_bits, problem_idx)
-    if not target_output:
-        print("Error: Targeted problem not found. Please restart.")
-        return
+    if problem_idx == 0:
+        # Sparse format: only the positions that differ from identity need to be listed
+        # (see DataLoader.parse_sparse_table) - avoids hand-writing/pasting a full 2^n table.
+        sparse_path = input("Enter path to sparse truth table file: ").strip()
+        try:
+            target_output = DataLoader.read_sparse_table_file(sparse_path)
+        except (OSError, ValueError) as e:
+            print(f"Error: {e}")
+            return
+        if len(target_output) != 2 ** num_bits:
+            print(f"Error: sparse file declares a table of size {len(target_output)}, "
+                  f"which doesn't match the {num_bits} bits you entered.")
+            return
+    else:
+        target_output = loader.get_output(num_bits, problem_idx)
+        if not target_output:
+            print("Error: Targeted problem not found. Please restart.")
+            return
     
     print(f"\nTarget Truth Table: {target_output}")
 
     # Experimental Configuration
-    num_experiments = 100
+    num_experiments = 30
     max_iterations = 10000
-    num_neighbors = 10  # Population size (N)
+    num_neighbors = 50  # Population size (N)
 
     print(f"Starting {num_experiments} experiments, each with {max_iterations} iterations...")
 
@@ -52,14 +67,26 @@ def main():
     best_circuit_per_experiment = []
     execution_times = []
 
-    
+    # Step 1: Analyze permutation cycles in the truth table (deterministic given
+    # target_output, so this only needs to run once, not once per experiment).
+    # check_zero_gate: Boolean to verify if the circuit requires any gates at all
+    cycles, is_gate_required = find_cycles(target_output, check_zero_gate=True)
+
+    if is_gate_required:
+        # Step 2: Build the encoding framework once. encoding_table/trajectory_base/cycles
+        # are only ever read during a run (never mutated), so they're safe to share across
+        # experiments as-is. qindividuals1-4 ARE mutated in place by updateQ() during a run
+        # (for AE-QTS/QTS/QEA), so each experiment needs its own deep copy of the pristine
+        # template below - a shallow .copy() would leave the inner numpy arrays shared,
+        # letting probability drift leak between experiments and breaking the i.i.d.
+        # assumption behind averaging over num_experiments trials.
+        (qindividuals1_template, qindividuals2_template, qindividuals3_template,
+         qindividuals4_template, encoding_table, trajectory_base) = build_encode(cycles)
+
     for r in range(num_experiments):
         # Track execution time for the current experiment trial
         experiment_start_time = time.time()
-        # Step 1: Analyze permutation cycles in the truth table
-        # check_zero_gate: Boolean to verify if the circuit requires any gates at all
-        cycles, is_gate_required = find_cycles(target_output, check_zero_gate=True)
-        
+
         if not is_gate_required:
             print(f"Experiment {r+1}: Identity mapping detected (Zero gates required).")
             best_scores_per_experiment.append(0)
@@ -67,9 +94,14 @@ def main():
             continue
 
         if algo_choice == 1:  # AE-QTS (Amplitude-Ensemble Quantum-Inspired Tabu Search)
-            # Step 2: Initialize Quantum Individuals and Encoding Tables
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Fresh deep copy per experiment: updateQ() mutates these in place, so reusing
+            # the template without copying (or shallow-copying it) would carry the previous
+            # experiment's learned probabilities into this one.
+            qindividuals1 = copy.deepcopy(qindividuals1_template)
+            qindividuals2 = copy.deepcopy(qindividuals2_template)
+            qindividuals3 = copy.deepcopy(qindividuals3_template)
+            qindividuals4 = copy.deepcopy(qindividuals4_template)
+
             # Step 3: Run the core search algorithm for a single experiment
             fitness_history_matrix, final_best_gate, best_circuit_this_run = AE_QTS_run_single_experiment(
                 max_iterations = max_iterations,
@@ -85,13 +117,16 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                delta_theta = 0.01
+                delta_theta = 0.005
             )
 
         elif algo_choice == 2: # QTS (Quantum-Inspired Tabu Search)
-            # Step 2: Initialize Quantum Individuals and Encoding Tables
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Fresh deep copy per experiment (updateQ() mutates these in place - see note above)
+            qindividuals1 = copy.deepcopy(qindividuals1_template)
+            qindividuals2 = copy.deepcopy(qindividuals2_template)
+            qindividuals3 = copy.deepcopy(qindividuals3_template)
+            qindividuals4 = copy.deepcopy(qindividuals4_template)
+
             # Step 3: Run the core search algorithm for a single experiment
             fitness_history_matrix, final_best_gate, best_circuit_this_run = QTS_run_single_experiment(
                 max_iterations = max_iterations,
@@ -111,10 +146,12 @@ def main():
             )
 
         elif algo_choice == 3: # QEA (Quantum Evolutionary Algorithm - Global Best Guided)
-            # Step 1: Initialize Quantum-Inspired Encoding Framework
-            # Generates probability-based individuals (qindividuals) and discrete encoding tables.
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Fresh deep copy per experiment (updateQ() mutates these in place - see note above)
+            qindividuals1 = copy.deepcopy(qindividuals1_template)
+            qindividuals2 = copy.deepcopy(qindividuals2_template)
+            qindividuals3 = copy.deepcopy(qindividuals3_template)
+            qindividuals4 = copy.deepcopy(qindividuals4_template)
+
             # Step 2: Execute QEA Core Evolution
             # This algorithm uses a 'Global Best' oriented rotation strategy to shift
             # quantum probability amplitudes toward the historical optimal circuit configuration.
@@ -137,8 +174,13 @@ def main():
 
         elif algo_choice == 4: # GA (Genetic Algorithm)
 
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # GA never mutates its seed population matrices in place (they're only sampled
+            # once via gen_nbrs to build the initial generation), so the shared template can
+            # be reused directly across experiments without copying.
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4 = (
+                qindividuals1_template, qindividuals2_template, qindividuals3_template, qindividuals4_template
+            )
+
             fitness_history_matrix, final_best_gate, best_circuit_this_run = GA_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
@@ -154,14 +196,16 @@ def main():
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
                 k=5,
-                pc=0.8, # crossover
-                pm=0.005 # mutation
+                pc=0.9, # crossover
+                pm=0.001 # mutation
 
             )
         elif algo_choice == 5: # DE (Differential Evolution - A population-based stochastic global optimizer)
-            # Step 1: Initialize Encoding Fram
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Never mutated in place - safe to reuse the shared template (see GA note above).
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4 = (
+                qindividuals1_template, qindividuals2_template, qindividuals3_template, qindividuals4_template
+            )
+
             fitness_history_matrix, final_best_gate , best_circuit_this_run = DE_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
@@ -176,12 +220,15 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                CR = 0.01,
+                CR = 0.3,
             )
         
-        elif algo_choice == 6: # TS (Tubu Search) 
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
+        elif algo_choice == 6: # TS (Tubu Search)
+            # Never mutated in place - safe to reuse the shared template (see GA note above).
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4 = (
+                qindividuals1_template, qindividuals2_template, qindividuals3_template, qindividuals4_template
+            )
+
             fitness_history_matrix, final_best_gate, best_circuit_this_run = TS_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
@@ -196,12 +243,15 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                tabu_size = 45
+                tabu_size = 150
             )
 
         elif algo_choice == 7: # PSO (Particle Swarm Optimization)
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Never mutated in place - safe to reuse the shared template (see GA note above).
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4 = (
+                qindividuals1_template, qindividuals2_template, qindividuals3_template, qindividuals4_template
+            )
+
             fitness_history_matrix, final_best_gate, best_circuit_this_run = PSO_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
@@ -216,13 +266,15 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                w=0.6,c1=3.0,c2=1.0
+                w=0.6,c1=2.5,c2=1.0
             )
 
         elif algo_choice == 8: # WOA (Whale Optimization Algorithm)
-            # Step 1: Initialize Encoding Framework
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Never mutated in place - safe to reuse the shared template (see GA note above).
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4 = (
+                qindividuals1_template, qindividuals2_template, qindividuals3_template, qindividuals4_template
+            )
+
             fitness_history_matrix, final_best_gate, best_circuit_this_run = WOA_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,
@@ -237,13 +289,16 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                b = 0.45  # Spiral Constant
+                b = 0.1  # Spiral Constant
             )
 
         elif algo_choice == 9: # ABC(Artificial Bee Colony Algorithm)
 
-            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, encoding_table, trajectory_base = build_encode(cycles)
-            
+            # Never mutated in place - safe to reuse the shared template (see GA note above).
+            pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4 = (
+                qindividuals1_template, qindividuals2_template, qindividuals3_template, qindividuals4_template
+            )
+
             fitness_history_matrix, final_best_gate, best_circuit_this_run = ABC_run_single_experiment(
                 max_iterations = max_iterations,
                 rotation_cycles = cycles,

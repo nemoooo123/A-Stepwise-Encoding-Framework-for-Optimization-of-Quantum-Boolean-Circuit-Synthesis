@@ -1,5 +1,6 @@
-from utils.init_state import gen_nbrs
-from utils.topology import decode_and_synthesize,verify_circuit_logic
+from utils.init_state import (gen_nbrs, build_categorical_model, gen_nbrs_categorical,
+                              categorical_best_vs_worst)
+from utils.topology import decode_and_synthesize, verify_circuit_logic, solution_key
 
 
 
@@ -17,10 +18,16 @@ def AE_QTS_run_single_experiment(max_iterations,
                                  qindividuals4, 
                                  fitness_history_matrix,
                                  target_output,
-                                 delta_theta):
+                                 delta_theta,
+                                 legacy=False):
     """
     Executes a single trial of the AE-QTS algorithm.
     Iteratively updates quantum individuals (qindividuals1-4) to minimize circuit gate count.
+
+    legacy=False (default): Layers 1-3 use the "cat÷n" categorical model (one distribution
+    per multi-qubit code, see utils/init_state.py) and neighbours are ranked by gate count
+    with ties broken by MORE Moving-Rule reductions. legacy=True: the original bitwise model
+    and gate-count-only ranking.
     """
 
     num_cycles = len(rotation_cycles)
@@ -28,9 +35,13 @@ def AE_QTS_run_single_experiment(max_iterations,
     global_best_gate_count = float('inf')
     global_best_circuit = []
 
-    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = gen_nbrs(
-        qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
-    )
+    if legacy:
+        sample = lambda: gen_nbrs(qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors)
+    else:
+        cat1, cat2, cat3 = build_categorical_model(qindividuals1, qindividuals2, qindividuals3)
+        sample = lambda: gen_nbrs_categorical(cat1, cat2, cat3, qindividuals4, num_neighbors)
+
+    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = sample()
     decode_and_synthesize(
         _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
     )
@@ -40,9 +51,7 @@ def AE_QTS_run_single_experiment(max_iterations,
 
         # Step 1: Neighborhood Generation
         # Create candidate solutions (neighbors) based on the current quantum state of qindividuals
-        nbr1, nbr2, nbr3, nbr4 = gen_nbrs(
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
-        )
+        nbr1, nbr2, nbr3, nbr4 = sample()
 
         # Step 2: Decoding and Circuit Synthesis
         # Convert quantum neighbors into concrete reversible circuit solutions
@@ -52,19 +61,31 @@ def AE_QTS_run_single_experiment(max_iterations,
         # Step 3: Fitness Evaluation (Gate Count Analysis)
         # Pair each solution's gate count with its original neighborhood index
         # Lower scores indicate superior individuals in our minimization framework.
-        solution_metrics = [(sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
-        # Sort by gate count in ascending order to identify the local optimal neighbor
+        if legacy:
+            solution_metrics = [(sol_tuple[1], idx) for idx, sol_tuple in enumerate(circuit_solutions)]
+        else:
+            # (gate count, -MR reductions): equal gate counts -> more MR reductions ranks higher
+            solution_metrics = [(solution_key(sol_tuple[1], sol_tuple[2]), idx)
+                                for idx, sol_tuple in enumerate(circuit_solutions)]
+        # Sort ascending (stable) to identify the local optimal neighbor
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
         local_best_idx = sorted_metrics[0][1]
         local_best_gate_count = circuit_solutions[local_best_idx][1]
         local_best_circuit = circuit_solutions[local_best_idx][0]
         # Step 4: Quantum Population Update (Angle Adjustment)
         # Update the probability amplitudes of qindividuals based on neighbor performance
-        updateQ(
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
-            num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-            [m[1] for m in sorted_metrics], num_cycles, delta_theta
-        )
+        if legacy:
+            updateQ(
+                qindividuals1, qindividuals2, qindividuals3, qindividuals4,
+                num_neighbors, nbr1, nbr2, nbr3, nbr4,
+                [m[1] for m in sorted_metrics], num_cycles, delta_theta
+            )
+        else:
+            updateQ_categorical(
+                cat1, cat2, cat3, qindividuals4,
+                num_neighbors, nbr1, nbr2, nbr3, nbr4,
+                [m[1] for m in sorted_metrics], num_cycles, delta_theta
+            )
 
         # Step 5: Global Best Tracking
         # Update the overall best solution if a new minimum gate count is discovered
@@ -177,5 +198,36 @@ def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
                                 qindividuals4[i][j][k][w_gate] = 0.0
         t += 1
 
-          
-   
+
+def update_layer4(qindividuals4, best_sol4, worst_sol4, num_cycles, dt):
+    """Bitwise best-vs-worst update of Layer 4 (identical to the Layer-4 part of updateQ)."""
+    for i in range(num_cycles):
+        for j in range(len(best_sol4[i])):
+            if len(best_sol4[i][j]) > 1:
+                for k in range(len(best_sol4[i][j])):
+                    b_gate = best_sol4[i][j][k]
+                    w_gate = worst_sol4[i][j][k]
+                    if b_gate != w_gate:
+                        qindividuals4[i][j][k][b_gate] += dt
+                        qindividuals4[i][j][k][w_gate] -= dt
+                        if qindividuals4[i][j][k][w_gate] <= 0:
+                            qindividuals4[i][j][k][b_gate] = 1.0
+                            qindividuals4[i][j][k][w_gate] = 0.0
+
+
+def updateQ_categorical(cat1, cat2, cat3, qindividuals4,
+                        num_neighbors, nbr1, nbr2, nbr3, nbr4,
+                        sorted_indices, num_cycles, delta_theta):
+    """
+    AE-QTS update for the categorical model: pair t (t-th best vs t-th worst) moves
+    min(delta/(t+1)/n, P[w]) from the worst value to the best value of every n-bit code of
+    Layers 1-3; Layer 4 keeps the bitwise update.
+    """
+    for t in range(int(num_neighbors / 2)):
+        best_idx = sorted_indices[t]
+        worst_idx = sorted_indices[num_neighbors - 1 - t]
+        dt = delta_theta / (t + 1)
+        categorical_best_vs_worst(cat1, cat2, cat3,
+                                  (nbr1[best_idx], nbr2[best_idx], nbr3[best_idx]),
+                                  (nbr1[worst_idx], nbr2[worst_idx], nbr3[worst_idx]), dt)
+        update_layer4(qindividuals4, nbr4[best_idx], nbr4[worst_idx], num_cycles, dt)

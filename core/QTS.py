@@ -1,5 +1,7 @@
-from utils.init_state import gen_nbrs
-from utils.topology import decode_and_synthesize,verify_circuit_logic
+from utils.init_state import (gen_nbrs, build_categorical_model, gen_nbrs_categorical,
+                              categorical_best_vs_worst)
+from utils.topology import decode_and_synthesize, verify_circuit_logic, solution_key
+from core.AE_QTS import update_layer4
 
 
 
@@ -17,21 +19,29 @@ def QTS_run_single_experiment(max_iterations,
                                  qindividuals4, 
                                  fitness_history_matrix, 
                                  target_output,
-                                 delta_theta):
+                                 delta_theta,
+                                 legacy=False):
     """
     Executes a single trial of the QTS algorithm for quantum circuit synthesis.
-    Iteratively evolves the quantum probability distributions (qindividuals1-4) 
+    Iteratively evolves the quantum probability distributions (qindividuals1-4)
     to converge toward the minimum gate count solution.
+
+    legacy=False (default): "cat÷n" categorical model for Layers 1-3 and MR tie-break
+    ranking (see AE_QTS.py). legacy=True: original bitwise model, gate-count-only ranking.
     """
-    
+
     num_cycles = len(rotation_cycles)
     current_iter = 0
     global_best_gate_count = float('inf')
     global_best_circuit = []
 
-    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = gen_nbrs(
-        qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
-    )
+    if legacy:
+        sample = lambda: gen_nbrs(qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors)
+    else:
+        cat1, cat2, cat3 = build_categorical_model(qindividuals1, qindividuals2, qindividuals3)
+        sample = lambda: gen_nbrs_categorical(cat1, cat2, cat3, qindividuals4, num_neighbors)
+
+    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = sample()
     decode_and_synthesize(
         _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
     )
@@ -43,9 +53,7 @@ def QTS_run_single_experiment(max_iterations,
         # Step 1: Neighborhood Generation
         # Sample candidate solutions (neighbors) based on the current quantum 
         # probability amplitudes stored in qindividuals.
-        nbr1, nbr2, nbr3, nbr4 = gen_nbrs(
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
-        )
+        nbr1, nbr2, nbr3, nbr4 = sample()
 
         # Step 2: Decoding and Circuit Synthesis
         # Transform the sampled quantum neighbors into concrete reversible circuit structures.
@@ -61,23 +69,36 @@ def QTS_run_single_experiment(max_iterations,
 
         # Step 3: Fitness Evaluation
         # Analyze the gate count of each synthesized solution to determine its quality.
-        solution_metrics = [(sol[1], idx) for idx, sol in enumerate(circuit_solutions)]
-        
-        # Sort candidates by gate count (Ascending) to identify the elite and weak performers.
+        if legacy:
+            solution_metrics = [(sol[1], idx) for idx, sol in enumerate(circuit_solutions)]
+        else:
+            # (gate count, -MR reductions): equal gate counts -> more MR reductions ranks higher
+            solution_metrics = [(solution_key(sol[1], sol[2]), idx) for idx, sol in enumerate(circuit_solutions)]
+
+        # Sort candidates (Ascending, stable) to identify the elite and weak performers.
         sorted_metrics = sorted(solution_metrics, key=lambda x: x[0])
-        
-        local_best_gate_count = sorted_metrics[0][0]
+
         local_best_idx = sorted_metrics[0][1]
-        local_best_circuit = circuit_solutions[local_best_idx]
+        local_best_gate_count = circuit_solutions[local_best_idx][1]
+        local_best_circuit = circuit_solutions[local_best_idx][0]
 
         # Step 4: QTS Quantum State Update
         # Apply the 'best-vs-worst' strategy to rotate the quantum states.
         # This shifts the probability toward the elite neighbor and away from the poor one.
-        updateQ(
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
-            num_neighbors, nbr1, nbr2, nbr3, nbr4, 
-            [m[1] for m in sorted_metrics], num_cycles ,delta_theta
-        )
+        if legacy:
+            updateQ(
+                qindividuals1, qindividuals2, qindividuals3, qindividuals4,
+                num_neighbors, nbr1, nbr2, nbr3, nbr4,
+                [m[1] for m in sorted_metrics], num_cycles ,delta_theta
+            )
+        else:
+            # Categorical best-vs-worst (step delta/n per n-bit code), Layer 4 bitwise
+            best_idx = sorted_metrics[0][1]
+            worst_idx = sorted_metrics[num_neighbors - 1][1]
+            categorical_best_vs_worst(cat1, cat2, cat3,
+                                      (nbr1[best_idx], nbr2[best_idx], nbr3[best_idx]),
+                                      (nbr1[worst_idx], nbr2[worst_idx], nbr3[worst_idx]), delta_theta)
+            update_layer4(qindividuals4, nbr4[best_idx], nbr4[worst_idx], num_cycles, delta_theta)
 
         # Step 5: Global Best Tracking
         # Retain the historical best circuit configuration found by the QTS process.

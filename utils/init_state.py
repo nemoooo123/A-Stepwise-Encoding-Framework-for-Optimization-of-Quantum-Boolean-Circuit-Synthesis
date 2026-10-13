@@ -350,6 +350,142 @@ def sample_layer_L4(prob_matrices_L4):
     
     return sequence_selection_results
 
+# ---------------------------------------------------------------------------------------------
+# "cat÷n" categorical probability model for Layers 1-3 (AE-QTS / QTS / QEA, default mode)
+#
+# In the bitwise model every code of n qubits (a cycle priority in L1, an entry point in L2,
+# a node priority in L3) is sampled bit by bit from n independent probabilities. Here each
+# such code is ONE probability distribution over its 2^n values, initialised uniform
+# (1/2^n each). Measurement is a roulette draw and the value's n bits (MSB first) become the
+# sampled bit list, so decoding and synthesis are unchanged. Updates move probability mass
+# from the worst value to the best value of a code, scaled by 1/n ("÷n") so that wide codes
+# (tiny 1/2^n per value) are not wiped out by a single worst draw. Layer 4 stays bitwise.
+#
+# Model structure (plain Python float lists, mirroring the shapes of the bitwise layers):
+#   cat1[c]       : distribution of cycle c's L1 code
+#   cat2[c]       : distribution of cycle c's L2 code
+#   cat3[c][s]    : None for a 999 (direct, 1-bit) step, else one distribution per node
+# ---------------------------------------------------------------------------------------------
+
+def build_categorical_model(prob_layer_L1, prob_layer_L2, prob_layer_L3):
+    """Create the uniform categorical model for Layers 1-3 from the bitwise layer shapes."""
+    def uniform(num_bits):
+        size = 1 << num_bits
+        return [1.0 / size] * size
+
+    cat1 = [uniform(len(code)) for code in prob_layer_L1]
+    cat2 = [uniform(len(code)) for code in prob_layer_L2]
+    cat3 = []
+    for cycle in prob_layer_L3:
+        cycle_codes = []
+        for step in cycle:
+            if len(step) == 1:      # [[999, 999]] marker: direct transition, nothing to choose
+                cycle_codes.append(None)
+            else:
+                cycle_codes.append([uniform(len(node)) for node in step])
+        cat3.append(cycle_codes)
+    return cat1, cat2, cat3
+
+
+def measure_categorical(probs):
+    """
+    Roulette measurement of one code: r ~ U[0,1); accumulate P[0], P[1], ...; the first index
+    whose running sum exceeds r is the value (the last index if rounding leaves the sum <= r).
+    Returns the value's bits, MSB first.
+    """
+    r = random.random()
+    acc = 0.0
+    size = len(probs)
+    value = size - 1
+    for k in range(size):
+        acc += probs[k]
+        if acc > r:
+            value = k
+            break
+    num_bits = size.bit_length() - 1
+    return [(value >> (num_bits - 1 - j)) & 1 for j in range(num_bits)]
+
+
+def gen_nbrs_categorical(cat1, cat2, cat3, prob_layer_L4, population_size):
+    """
+    Categorical counterpart of gen_nbrs(): same output shapes (L1 as an int ndarray per
+    individual, L2 bit lists, L3 node bit lists / 999 markers, L4 repaired bit lists).
+    """
+    candidates_L1 = [np.array([measure_categorical(p) for p in cat1]) for _ in range(population_size)]
+    candidates_L2 = [[measure_categorical(p) for p in cat2] for _ in range(population_size)]
+    candidates_L3 = []
+    for _ in range(population_size):
+        individual = []
+        for cycle in cat3:
+            cycle_samples = []
+            for step in cycle:
+                if step is None:
+                    cycle_samples.append([999])
+                else:
+                    cycle_samples.append([measure_categorical(p) for p in step])
+            individual.append(cycle_samples)
+        candidates_L3.append(individual)
+    candidates_L4 = [sample_layer_L4(prob_layer_L4) for _ in range(population_size)]
+    return candidates_L1, candidates_L2, candidates_L3, candidates_L4
+
+
+def _code_value(bits):
+    val = 0
+    for b in bits:
+        val = (val << 1) | int(b)
+    return val
+
+
+def _iter_codes(cat1, cat2, cat3, sol1, sol2, sol3):
+    """Yield (distribution, sampled value) for every categorical code of one solution."""
+    for c, probs in enumerate(cat1):
+        yield probs, _code_value(sol1[c])
+    for c, probs in enumerate(cat2):
+        yield probs, _code_value(sol2[c])
+    for c, cycle in enumerate(cat3):
+        for s, step in enumerate(cycle):
+            if step is None:
+                continue
+            for k, probs in enumerate(step):
+                yield probs, _code_value(sol3[c][s][k])
+
+
+def categorical_best_vs_worst(cat1, cat2, cat3, best, worst, dt):
+    """
+    AE-QTS / QTS update of Layers 1-3: for every code with best value b != worst value w,
+    move m = min(dt / n, P[w]) from P[w] to P[b] (n = the code's bit count). For n = 1 this
+    is exactly the bitwise rule (P[b] += dt, P[w] -= dt, clamped at P[w] = 0).
+    best / worst: (sol1, sol2, sol3) of the two neighbours.
+    """
+    worst_values = [v for _, v in _iter_codes(cat1, cat2, cat3, *worst)]
+    for (probs, b), w in zip(_iter_codes(cat1, cat2, cat3, *best), worst_values):
+        if b == w:
+            continue
+        num_bits = len(probs).bit_length() - 1
+        m = min(dt / num_bits, probs[w])
+        probs[w] -= m
+        probs[b] += m
+
+
+def categorical_toward(cat1, cat2, cat3, target, delta):
+    """
+    QEA update of Layers 1-3 toward the global best: for every code with target value g,
+    raise P[g] by m = min(delta / n, 1 - P[g]), taking the mass from the other values in
+    proportion to what they hold.
+    """
+    for probs, g in _iter_codes(cat1, cat2, cat3, *target):
+        rest = 1.0 - probs[g]
+        if rest <= 0.0:
+            continue
+        num_bits = len(probs).bit_length() - 1
+        m = min(delta / num_bits, rest)
+        scale = (rest - m) / rest
+        for k in range(len(probs)):
+            if k != g:
+                probs[k] *= scale
+        probs[g] = 1.0 - (rest - m)
+
+
 def repair_sequence_logic(sequence_bits):
     """
     Repair mechanism to ensure balance between binary states in Layer 4.

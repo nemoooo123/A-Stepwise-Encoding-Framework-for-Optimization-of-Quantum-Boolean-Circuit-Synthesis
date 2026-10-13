@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import copy
-from utils.init_state import gen_nbrs
+from utils.init_state import gen_nbrs, build_categorical_model, gen_nbrs_categorical, categorical_toward
 from utils.topology import decode_and_synthesize,verify_circuit_logic
 
 
@@ -20,11 +20,17 @@ def QEA_run_single_experiment(max_iterations,
                                  qindividuals4, 
                                  fitness_history_matrix, 
                                  target_output,
-                                 delta_theta):
+                                 delta_theta,
+                                 legacy=False):
     """
     Executes a single trial of the QEA algorithm for quantum circuit synthesis.
-    Iteratively evolves the quantum probability distributions (qindividuals1-4) 
+    Iteratively evolves the quantum probability distributions (qindividuals1-4)
     to converge toward the minimum gate count solution using global best reinforcement.
+
+    legacy=False (default): Layers 1-3 use the "cat÷n" categorical model, rotated toward the
+    global best by delta/n per n-bit code (utils/init_state.categorical_toward); Layer 4 stays
+    bitwise. legacy=True: the original bitwise model.
+    In both modes the global best is tracked by gate count only (strict improvement).
     """
     
     num_cycles = len(rotation_cycles)
@@ -35,9 +41,13 @@ def QEA_run_single_experiment(max_iterations,
     # Track the Global Best Position (gb_pos) across layers ---
     gb_pos1, gb_pos2, gb_pos3, gb_pos4 = None, None, None, None
 
-    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = gen_nbrs(
-        qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
-    )
+    if legacy:
+        sample = lambda: gen_nbrs(qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors)
+    else:
+        cat1, cat2, cat3 = build_categorical_model(qindividuals1, qindividuals2, qindividuals3)
+        sample = lambda: gen_nbrs_categorical(cat1, cat2, cat3, qindividuals4, num_neighbors)
+
+    _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4 = sample()
     decode_and_synthesize(
         _init_nbr1, _init_nbr2, _init_nbr3, _init_nbr4, encoding_table, num_bits, num_neighbors, base_trajectory
     )
@@ -49,9 +59,7 @@ def QEA_run_single_experiment(max_iterations,
         # Step 1: Neighborhood Generation
         # Sample candidate solutions (neighbors) based on the current quantum 
         # probability amplitudes stored in qindividuals.
-        nbr1, nbr2, nbr3, nbr4 = gen_nbrs(
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, num_neighbors
-        )
+        nbr1, nbr2, nbr3, nbr4 = sample()
 
         # Step 2: Decoding and Circuit Synthesis
         # Transform the sampled quantum neighbors into concrete reversible circuit structures.
@@ -75,7 +83,7 @@ def QEA_run_single_experiment(max_iterations,
         # If the current local best is superior to the historical global best, update records.
         if local_best_gate < global_best_gate_count:
             global_best_gate_count = local_best_gate
-            global_best_circuit = circuit_solutions[local_best_idx]
+            global_best_circuit = circuit_solutions[local_best_idx][0]
             # Store the elite "Position Genes" for quantum rotation reinforcement
             gb_pos1 = copy.deepcopy(nbr1[local_best_idx])
             gb_pos2 = copy.deepcopy(nbr2[local_best_idx])
@@ -85,11 +93,15 @@ def QEA_run_single_experiment(max_iterations,
         # Step 5: QEA Quantum State Update
         # Rotate quantum states towards the Global Best Position (gb_pos) 
         # to intensify search around the most promising regions of the solution space.
-        updateQ(
-            qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
-            gb_pos1, gb_pos2, gb_pos3, gb_pos4, 
-            num_cycles, delta_theta
-        )
+        if legacy:
+            updateQ(
+                qindividuals1, qindividuals2, qindividuals3, qindividuals4,
+                gb_pos1, gb_pos2, gb_pos3, gb_pos4,
+                num_cycles, delta_theta
+            )
+        else:
+            categorical_toward(cat1, cat2, cat3, (gb_pos1, gb_pos2, gb_pos3), delta_theta)
+            update_layer4_toward(qindividuals4, gb_pos4, num_cycles, delta_theta)
 
         # Step 6: Data Recording for Convergence Analysis
         # Store the current global minimum gate count into the fitness history matrix.
@@ -98,8 +110,23 @@ def QEA_run_single_experiment(max_iterations,
     # Returns the convergence history and the optimal circuit found via QEA optimization.
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
-def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4, 
-                            gb_pos1, gb_pos2, gb_pos3, gb_pos4, 
+def update_layer4_toward(qindividuals4, best_sol4, num_cycles, delta_theta):
+    """Bitwise rotation of Layer 4 toward the global best (identical to updateQ's Layer-4 part)."""
+    for i in range(num_cycles):
+        for j in range(len(best_sol4[i])):
+            if len(best_sol4[i][j]) > 1:
+                for k in range(len(best_sol4[i][j])):
+                    b_val = best_sol4[i][j][k]
+                    w_val = 1 if b_val == 0 else 0
+                    qindividuals4[i][j][k][b_val] += delta_theta
+                    qindividuals4[i][j][k][w_val] -= delta_theta
+                    if qindividuals4[i][j][k][w_val] <= 0:
+                        qindividuals4[i][j][k][b_val] = 1.0
+                        qindividuals4[i][j][k][w_val] = 0.0
+
+
+def updateQ(qindividuals1, qindividuals2, qindividuals3, qindividuals4,
+                            gb_pos1, gb_pos2, gb_pos3, gb_pos4,
                               num_cycles, delta_theta):
     """
     Updates the probability distributions of quantum populations (q1-q4).

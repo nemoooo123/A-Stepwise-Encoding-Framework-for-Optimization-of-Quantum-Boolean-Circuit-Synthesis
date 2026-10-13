@@ -1,5 +1,5 @@
 from utils.init_state import gen_nbrs, repair_sequence_logic
-from utils.topology import decode_and_synthesize, synthesize_route, verify_circuit_logic
+from utils.topology import decode_and_synthesize, synthesize_route, verify_circuit_logic, rank_key
 import copy
 import random
 
@@ -82,11 +82,15 @@ def generate_ts_neighbors(c1, c2, c3, c4, encoding_table, num_bits, num_neighbor
 def TS_run_single_experiment(
                 max_iterations, rotation_cycles, num_neighbors, num_bits, base_trajectory,
                 experiment_id, encoding_table, pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4,
-                fitness_history_matrix, target_output, tabu_size
+                fitness_history_matrix, target_output, tabu_size, legacy=False
                 ):
     """
-    Executes a single Tabu Search experiment: A local search metaheuristic 
+    Executes a single Tabu Search experiment: A local search metaheuristic
     that uses a tabu list to prevent cycling and escape local optima.
+
+    legacy=False (default): candidates are ranked, and the aspiration / global-best tests
+    are made, lexicographically (gate count ascending, then MORE Moving-Rule reductions).
+    legacy=True: gate count only (original behaviour).
     """
     
     # --- Step 1: Initialize current solution ---
@@ -97,13 +101,13 @@ def TS_run_single_experiment(
 
     # Nested function to evaluate fitness for a single individual
     def evaluate_fitness(c1, c2, c3, c4):
-        """Synthesizes the circuit and returns the gate count and circuit structure."""
-        sol = decode_and_synthesize([c1], [c2], [c3], [c4], 
+        """Synthesizes the circuit and returns the gate count, circuit structure and MR reductions."""
+        sol = decode_and_synthesize([c1], [c2], [c3], [c4],
                                      encoding_table, num_bits, 1, base_trajectory)
-        return len(sol[0][0]), sol[0][0]
+        return len(sol[0][0]), sol[0][0], sol[0][2]
 
     # Calculate initial fitness and store as the global best for this run
-    best_fitness, best_circuit = evaluate_fitness(curr_c1, curr_c2, curr_c3, curr_c4)
+    best_fitness, best_circuit, best_mr = evaluate_fitness(curr_c1, curr_c2, curr_c3, curr_c4)
     
     # Track the best global state found during the search
     gbest_c1, gbest_c2, gbest_c3, gbest_c4 = (
@@ -139,24 +143,26 @@ def TS_run_single_experiment(
             
             # Optimization Goal: Minimize gate count
             fitness = len(circuit)
-            scored_candidates.append((state, move_id, fitness, circuit))
-            
-        # Sort candidates by fitness in ascending order (best performing first)
-        scored_candidates.sort(key=lambda x: x[2])
-        
+            scored_candidates.append((state, move_id, fitness, circuit, circuit_solutions[idx][2]))
+
+        # Sort candidates by fitness in ascending order (best performing first; stable)
+        scored_candidates.sort(key=lambda x: rank_key(x[2], x[4], legacy))
+
         # --- Step 4: Selection with Tabu and Aspiration Criterion ---
         found_next_move = False
-        for next_state, move_id, next_fitness, next_circuit in scored_candidates:
+        best_key = rank_key(best_fitness, best_mr, legacy)
+        for next_state, move_id, next_fitness, next_circuit, next_mr in scored_candidates:
             # Aspiration Criterion: Accept a tabu move if it yields a new global best
-            is_aspiring = next_fitness < best_fitness
-            
+            is_aspiring = rank_key(next_fitness, next_mr, legacy) < best_key
+
             if (move_id not in tabu_list) or is_aspiring:
                 # Accept the move and update the current search position
                 curr_c1, curr_c2, curr_c3, curr_c4 = next_state
-                
+
                 # Update the record-breaking global best
-                if next_fitness < best_fitness:
+                if is_aspiring:
                     best_fitness = next_fitness
+                    best_mr = next_mr
                     best_circuit = next_circuit
                     # Deep copy best coordinates (Note: ensure all layers are copied if needed)
                 

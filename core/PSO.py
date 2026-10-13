@@ -1,16 +1,25 @@
 import numpy as np
 import copy
 from utils.init_state import  repair_sequence_logic
-from utils.topology import decode_and_synthesize, verify_circuit_logic
+from utils.topology import decode_and_synthesize, verify_circuit_logic, rank_key
+
+def _argbest(fitness, mr, legacy):
+    """np.argmin of the gate counts (legacy) or the lexicographic best (gate count asc, MR desc)."""
+    if legacy:
+        return np.argmin(fitness)
+    return min(range(len(fitness)), key=lambda i: (fitness[i], -mr[i]))
 
 def PSO_run_single_experiment(
     max_iterations, rotation_cycles, num_neighbors, num_bits, base_trajectory,
     experiment_id, encoding_table, pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4,
-    fitness_history_matrix, target_output, w, c1, c2
+    fitness_history_matrix, target_output, w, c1, c2, legacy=False
 ):
     """
-    Execute a single PSO experiment: Each neighbor is treated as a particle 
+    Execute a single PSO experiment: Each neighbor is treated as a particle
     with a continuous position and velocity vector across four encoding layers.
+
+    legacy=False (default): pBest / gBest updates compare lexicographically (gate count
+    ascending, then MORE Moving-Rule reductions). legacy=True: gate count only.
     """
     
     # --- Step 1: Initialization ---
@@ -37,17 +46,19 @@ def PSO_run_single_experiment(
     )
     # Define fitness as the gate count (Optimization goal: Minimize gate count)
     pbest_fitness = [sol[1] for sol in circuit_solutions]
-    
+    pbest_mr = [sol[2] for sol in circuit_solutions]  # Moving-Rule reductions (tie-break)
+
     # Initialize Global Best (gBest)
-    gbest_idx = np.argmin(pbest_fitness) # Find the index of the particle with the minimum gates
+    gbest_idx = _argbest(pbest_fitness, pbest_mr, legacy) # Find the index of the particle with the minimum gates
     gbest_gate_count = pbest_fitness[gbest_idx] # Record the minimum gate count found so far
+    gbest_mr = pbest_mr[gbest_idx]
     
     # Perform a deep copy of the global best position across all four layers
     gbest_n1, gbest_n2, gbest_n3, gbest_n4 = (
         copy.deepcopy(pbest_n1[gbest_idx]), copy.deepcopy(pbest_n2[gbest_idx]),
         copy.deepcopy(pbest_n3[gbest_idx]), copy.deepcopy(pbest_n4[gbest_idx])
     )
-    gbest_circuit = circuit_solutions[gbest_idx] # Store the best circuit structure found
+    gbest_circuit = circuit_solutions[gbest_idx][0] # Store the best circuit structure found
     
     current_iter = 0
     # --- Step 2: Swarm Evolution Loop ---
@@ -98,15 +109,17 @@ def PSO_run_single_experiment(
 
         # Identify local best of the current iteration (Iteration Best)
         lbest_fitness = [sol[1] for sol in circuit_solutions]
+        lbest_mr = [sol[2] for sol in circuit_solutions]
 
         # Identify local best of the current iteration (Iteration Best)
-        lbest_idx = np.argmin(lbest_fitness) 
-        lbest_gate_count = lbest_fitness[lbest_idx] 
-        
+        lbest_idx = _argbest(lbest_fitness, lbest_mr, legacy)
+        lbest_gate_count = lbest_fitness[lbest_idx]
+
         # --- Step 3: Update Personal Best (pBest) and Global Best (gBest) ---
         for i in range(num_neighbors):
-            if lbest_fitness[i] < pbest_fitness[i]:
+            if rank_key(lbest_fitness[i], lbest_mr[i], legacy) < rank_key(pbest_fitness[i], pbest_mr[i], legacy):
                 pbest_fitness[i] = lbest_fitness[i]  # Update gBest fitness score
+                pbest_mr[i] = lbest_mr[i]
                 # Update gBest position data (continuous coordinates)
                 pbest_n1[i], pbest_n2[i], pbest_n3[i], pbest_n4[i] = (
                     copy.deepcopy(curr_nbr1[i]), copy.deepcopy(curr_nbr2[i]),
@@ -115,9 +128,10 @@ def PSO_run_single_experiment(
             
         
         # If the best particle in this iteration outperforms the global best
-        if lbest_gate_count < gbest_gate_count:
+        if rank_key(lbest_gate_count, lbest_mr[lbest_idx], legacy) < rank_key(gbest_gate_count, gbest_mr, legacy):
             gbest_gate_count = lbest_gate_count # Update gBest fitness score
-            gbest_circuit = circuit_solutions[lbest_idx]
+            gbest_mr = lbest_mr[lbest_idx]
+            gbest_circuit = circuit_solutions[lbest_idx][0]
             # Update gBest position data (continuous coordinates)
             gbest_n1, gbest_n2, gbest_n3, gbest_n4 = (
                 copy.deepcopy(curr_nbr1[lbest_idx]), copy.deepcopy(curr_nbr2[lbest_idx]),

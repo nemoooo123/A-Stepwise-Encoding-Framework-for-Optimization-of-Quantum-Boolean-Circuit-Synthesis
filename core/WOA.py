@@ -2,30 +2,39 @@ import random
 import copy
 import numpy as np
 from utils.init_state import gen_nbrs, repair_sequence_logic
-from utils.topology import decode_and_synthesize, verify_circuit_logic
+from utils.topology import decode_and_synthesize, verify_circuit_logic, rank_key
 
 def WOA_run_single_experiment(max_iterations, rotation_cycles, num_neighbors, num_bits,
                                 base_trajectory, experiment_id, encoding_table,
                                 pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4,
                                 fitness_history_matrix, target_output, b,
-                                a_start=2.0, a_end=0.0, a_decay_power=1.0):
-    
+                                a_start=2.0, a_end=0.0, a_decay_power=1.0, legacy=False):
+
     """
     Executes a single experiment using the Whale Optimization Algorithm (WOA).
     Simulates whale hunting behavior to optimize quantum circuit synthesis.
+
+    legacy=False (default): leader choice, greedy selection and leader updates compare
+    lexicographically (gate count ascending, then MORE Moving-Rule reductions).
+    legacy=True: gate count only (original behaviour).
     """
      # --- Step 1: Initialize Population (Whale Swarm) ---
     # nbr1~4 represent the current positions of all whales in the search space
     nbr1, nbr2, nbr3, nbr4 = gen_nbrs(pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, num_neighbors)
-    
+
     # --- Step 2: Initial Evaluation ---
     circuit_solutions = decode_and_synthesize(nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory)
     fitness = [sol[1] for sol in circuit_solutions]
-    current_circuits = list(circuit_solutions)
-    
+    mr = [sol[2] for sol in circuit_solutions]  # Moving-Rule reductions (tie-break)
+    current_circuits = [sol[0] for sol in circuit_solutions]
+
     # Track the global leader whale (Best individual found so far)
-    best_idx = np.argmin(fitness)
+    if legacy:
+        best_idx = np.argmin(fitness)
+    else:
+        best_idx = min(range(num_neighbors), key=lambda i: (fitness[i], -mr[i]))
     global_best_gate = fitness[best_idx]
+    global_best_mr = mr[best_idx]
     global_best_circuit = current_circuits[best_idx]
     leader_pos = (copy.deepcopy(nbr1[best_idx]), copy.deepcopy(nbr2[best_idx]), 
                   copy.deepcopy(nbr3[best_idx]), copy.deepcopy(nbr4[best_idx]))
@@ -67,17 +76,19 @@ def WOA_run_single_experiment(max_iterations, rotation_cycles, num_neighbors, nu
                 new_child = generate_woa_spiral((nbr1[i], nbr2[i], nbr3[i], nbr4[i]), leader_pos, b)
 
             # --- Evaluate the new candidate solution ---
-            new_per_circuit, new_fit = evaluate_woa_fitness(new_child, encoding_table, num_bits, base_trajectory)
+            new_per_circuit, new_fit, new_mr = evaluate_woa_fitness(new_child, encoding_table, num_bits, base_trajectory)
 
             # --- Greedy Selection ---
-            if new_fit < fitness[i]:
+            if rank_key(new_fit, new_mr, legacy) < rank_key(fitness[i], mr[i], legacy):
                 nbr1[i], nbr2[i], nbr3[i], nbr4[i] = new_child
                 fitness[i] = new_fit
+                mr[i] = new_mr
                 current_circuits[i] = new_per_circuit
-                
+
                 # Synchronously update the Global Leader whale
-                if new_fit < global_best_gate:
+                if rank_key(new_fit, new_mr, legacy) < rank_key(global_best_gate, global_best_mr, legacy):
                     global_best_gate = new_fit
+                    global_best_mr = new_mr
                     global_best_circuit = new_per_circuit
                     leader_pos = (copy.deepcopy(nbr1[i]), copy.deepcopy(nbr2[i]), 
                                   copy.deepcopy(nbr3[i]), copy.deepcopy(nbr4[i]))
@@ -171,9 +182,9 @@ def generate_woa_spiral(p1, leader, b):
 def evaluate_woa_fitness(child, encoding_table, num_bits, trajectories):
     """ 
     Encapsulates decoding and evaluation logic.
-    Ensures synthesized circuit content and Gate Count are returned. 
+    Ensures synthesized circuit content, Gate Count and MR reductions are returned.
     """
     c1, c2, c3, c4 = child
     # Decode single whale position (wrapped as a population of size 1)
     res = decode_and_synthesize([c1], [c2], [c3], [c4], encoding_table, num_bits, 1, trajectories)
-    return res[0][0], len(res[0][0])
+    return res[0][0], len(res[0][0]), res[0][2]

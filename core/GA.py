@@ -1,5 +1,5 @@
 from utils.init_state import gen_nbrs, repair_sequence_logic
-from utils.topology import decode_and_synthesize, verify_circuit_logic
+from utils.topology import decode_and_synthesize, verify_circuit_logic, rank_key
 
 import random
 import copy
@@ -21,11 +21,16 @@ def GA_run_single_experiment(
                 target_output,
                 k,
                 pc,
-                pm
+                pm,
+                legacy=False
             ):
     """
     Execute a single experiment using Genetic Algorithm (GA).
     Manages the evolutionary process: initialization, evaluation, and global best tracking.
+
+    legacy=False (default): every comparison between solutions (elite, tournament, survivor
+    truncation, global best) is lexicographic - gate count ascending, then MORE Moving-Rule
+    reductions. legacy=True: gate count only (original behaviour).
     """
 
     # --- Population Initialization ---
@@ -40,33 +45,38 @@ def GA_run_single_experiment(
     # Calculate initial fitness (Gate Count in this context)
     # Format: [gate_count, gate_count, ...]
     local_fitness = [sol[1] for sol in circuit_solutions]
+    local_mr = [sol[2] for sol in circuit_solutions]  # Moving-Rule reductions (tie-break)
     local_indices = list(range(num_neighbors)) # Index tracking [0, 1, 2, ...]
     # Initialize global best records
-    global_best_gate_count = min(local_fitness)
-    best_idx = np.argmin(local_fitness)
+    best_idx = argbest(local_fitness, local_mr, legacy)
+    global_best_gate_count = local_fitness[best_idx]
+    global_best_mr = local_mr[best_idx]
     global_best_circuit = circuit_solutions[best_idx][0]
     local_best_circuit = circuit_solutions[best_idx][0]
     # --- Evolutionary Loop ---
     current_iter = 0
     while current_iter < max_iterations:
         current_iter += 1
-        
+
         # Execute core GA operations: Selection, Crossover, Mutation, and Evaluation
         # Returns new generation's encoding, fitness, and synthesized circuits
-        nbr1, nbr2, nbr3, nbr4, local_fitness, local_circuit = Genetic_Algorithm_Core(
+        nbr1, nbr2, nbr3, nbr4, local_fitness, local_mr, local_circuit = Genetic_Algorithm_Core(
             nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, pc, pm,
-            encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory
+            encoding_table, local_fitness, local_mr, local_best_circuit, local_indices, base_trajectory, legacy
         )
         # --- Update Global Best Solution ---
         # Find the best individual in the current generation
-        current_local_best_idx = np.argmin(local_fitness)
+        current_local_best_idx = argbest(local_fitness, local_mr, legacy)
         current_local_best_fit = local_fitness[current_local_best_idx]
+        current_local_best_mr = local_mr[current_local_best_idx]
         local_best_circuit = local_circuit[current_local_best_idx]
 
         # Update global records if a better solution is found
-        if current_local_best_fit < global_best_gate_count:
+        if (rank_key(current_local_best_fit, current_local_best_mr, legacy)
+                < rank_key(global_best_gate_count, global_best_mr, legacy)):
 
             global_best_gate_count = current_local_best_fit
+            global_best_mr = current_local_best_mr
             global_best_circuit = local_best_circuit
 
         # Log historical data for convergence curve plotting
@@ -75,28 +85,39 @@ def GA_run_single_experiment(
     return fitness_history_matrix, global_best_gate_count, global_best_circuit
 
 
+def argbest(fitness, mr, legacy):
+    """Index of the best individual (first one on ties): np.argmin of the gate counts in
+    legacy mode, lexicographic (gate count asc, MR reductions desc) otherwise."""
+    if legacy:
+        return np.argmin(fitness)
+    return min(range(len(fitness)), key=lambda i: (fitness[i], -mr[i]))
+
+
 def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, pc, pm,
-                           encoding_table, local_fitness, local_best_circuit, local_indices, base_trajectory):
+                           encoding_table, local_fitness, local_mr, local_best_circuit, local_indices,
+                           base_trajectory, legacy=False):
     """
     Execution of single generation GA logic: Selection -> Crossover -> Mutation -> Evaluation -> Elitist Truncation.
     Generates a full num_neighbors offspring (one fitness evaluation each) so every generation
     spends exactly num_neighbors evaluations, then merges the previous elite back in and keeps
     the best num_neighbors survivors (11-in / 10-out replacement) without re-evaluating it.
     """
-    new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit = [], [], [], [], [], []
+    new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_mr, new_circuit = [], [], [], [], [], [], []
 
-    best_in_current_idx = np.argmin(local_fitness)
+    best_in_current_idx = argbest(local_fitness, local_mr, legacy)
     elite = (
         copy.deepcopy(nbr1[best_in_current_idx]), copy.deepcopy(nbr2[best_in_current_idx]),
         copy.deepcopy(nbr3[best_in_current_idx]), copy.deepcopy(nbr4[best_in_current_idx]),
-        local_fitness[best_in_current_idx], local_best_circuit
+        local_fitness[best_in_current_idx], local_best_circuit, local_mr[best_in_current_idx]
     )
+    # Tournament comparison keys (plain gate counts in legacy mode)
+    selection_keys = [rank_key(f, m, legacy) for f, m in zip(local_fitness, local_mr)]
 
     # Generate and evaluate a full new generation (num_neighbors offspring)
     while len(new_fit) < num_neighbors:
         # Parent Selection via Tournament Selection
-        p1_idx = tournament_selection(local_fitness, local_indices, k)
-        p2_idx = tournament_selection(local_fitness, local_indices, k)
+        p1_idx = tournament_selection(selection_keys, local_indices, k)
+        p2_idx = tournament_selection(selection_keys, local_indices, k)
         
         p1 = (nbr1[p1_idx], nbr2[p1_idx], nbr3[p1_idx], nbr4[p1_idx])
         p2 = (nbr1[p2_idx], nbr2[p2_idx], nbr3[p2_idx], nbr4[p2_idx])
@@ -124,6 +145,7 @@ def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, p
         new_nbr4.append(c4)
         new_circuit.append(circuit_solutions[0][0])
         new_fit.append(fit)
+        new_mr.append(circuit_solutions[0][2])
 
     # Elitist truncation: merge the previous elite back in (11 candidates) and keep the best
     # num_neighbors without spending an extra evaluation on it (its fitness is already known)
@@ -133,22 +155,28 @@ def Genetic_Algorithm_Core(nbr1, nbr2, nbr3, nbr4, num_neighbors, num_bits, k, p
     new_nbr4.append(elite[3])
     new_fit.append(elite[4])
     new_circuit.append(elite[5])
+    new_mr.append(elite[6])
 
-    survivors = np.argsort(new_fit)[:num_neighbors]
+    if legacy:
+        survivors = np.argsort(new_fit)[:num_neighbors]
+    else:
+        survivors = sorted(range(len(new_fit)), key=lambda i: (new_fit[i], -new_mr[i]))[:num_neighbors]
     new_nbr1 = [new_nbr1[i] for i in survivors]
     new_nbr2 = [new_nbr2[i] for i in survivors]
     new_nbr3 = [new_nbr3[i] for i in survivors]
     new_nbr4 = [new_nbr4[i] for i in survivors]
     new_fit = [new_fit[i] for i in survivors]
+    new_mr = [new_mr[i] for i in survivors]
     new_circuit = [new_circuit[i] for i in survivors]
 
-    return new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_circuit
+    return new_nbr1, new_nbr2, new_nbr3, new_nbr4, new_fit, new_mr, new_circuit
 
 def tournament_selection(fitness_list, idx_list, k):
     """
     Tournament Selection:
     Randomly select k individuals and return the index of the one with the best fitness.
     Higher k increases selection pressure.
+    fitness_list holds comparison keys (gate counts, or (gate count, -MR) tuples).
     """
 
     tournament_indices = random.sample(range(len(fitness_list)), k)

@@ -2,7 +2,7 @@ import random
 import copy
 import numpy as np
 from utils.init_state import gen_nbrs, repair_sequence_logic
-from utils.topology import decode_and_synthesize, verify_circuit_logic
+from utils.topology import decode_and_synthesize, verify_circuit_logic, rank_key
 
 def ABC_run_single_experiment(max_iterations,
                 rotation_cycles,
@@ -17,7 +17,16 @@ def ABC_run_single_experiment(max_iterations,
                 pop_matrix4,
                 fitness_history_matrix,
                 target_output,
-                limit):
+                limit,
+                legacy=False):
+    """
+    Executes a single experiment using the Artificial Bee Colony algorithm (ABC).
+
+    legacy=False (default): greedy selection and the global-best update compare
+    lexicographically (gate count ascending, then MORE Moving-Rule reductions).
+    legacy=True: gate count only (original behaviour). Onlooker roulette weights stay
+    gate-count based in both modes.
+    """
 
     # Initialize population (Food Sources)
     nbr1, nbr2, nbr3, nbr4 = gen_nbrs(pop_matrix1, pop_matrix2, pop_matrix3, pop_matrix4, num_neighbors)
@@ -26,10 +35,13 @@ def ABC_run_single_experiment(max_iterations,
     circuit_solutions = decode_and_synthesize(nbr1, nbr2, nbr3, nbr4, encoding_table, num_bits, num_neighbors, base_trajectory)
     fitness = [sol[1] for sol in circuit_solutions]
     circuits = [sol[0] for sol in circuit_solutions]
+    mr = [sol[2] for sol in circuit_solutions]  # Moving-Rule reductions (tie-break)
 
     trials = [0] * num_neighbors # Record the number of trials without fitness improvement for each food source
-    global_best_gate = min(fitness)
-    global_best_circuit = circuits[np.argmin(fitness)]
+    best_idx = _argbest(fitness, mr, legacy)
+    global_best_gate = fitness[best_idx]
+    global_best_mr = mr[best_idx]
+    global_best_circuit = circuits[best_idx]
 
     current_iter = 0
     while current_iter < max_iterations:
@@ -39,7 +51,7 @@ def ABC_run_single_experiment(max_iterations,
         # employed/onlooker budget, so every iteration spends exactly num_neighbors evaluations.
         scout_targets = [i for i in range(num_neighbors) if trials[i] > limit]
         nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials = scout_bee_phase(
-            nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, scout_targets, encoding_table, num_bits, base_trajectory)
+            nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, scout_targets, encoding_table, num_bits, base_trajectory, mr)
 
         remaining = num_neighbors - len(scout_targets)
         emp_n = remaining // 2
@@ -47,11 +59,11 @@ def ABC_run_single_experiment(max_iterations,
 
         # 1. Employed Bee Phase: Local search and comparison for each food source
         nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials = employed_bee_phase(
-            nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, base_trajectory, emp_n)
+            nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, base_trajectory, emp_n, mr, legacy)
 
         # 2. Onlooker Bee Phase: Probabilistic search reinforcement based on solution quality
         nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials = onlooker_bee_phase(
-            nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, base_trajectory, onl_n)
+            nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, base_trajectory, onl_n, mr, legacy)
 
         # Integrity Verification
         # Check if the synthesized circuits fulfill the logic requirements for the target output
@@ -60,16 +72,26 @@ def ABC_run_single_experiment(max_iterations,
         # if valid_count != num_neighbors:
         #     print(f"Warning: Logic verification failed for {num_neighbors - valid_count} neighbors.")
         # Update Global Best Solution
-        if min(fitness) < global_best_gate:
-            global_best_gate = min(fitness)
-            global_best_circuit = circuits[np.argmin(fitness)]
+        best_idx = _argbest(fitness, mr, legacy)
+        if rank_key(fitness[best_idx], mr[best_idx], legacy) < rank_key(global_best_gate, global_best_mr, legacy):
+            global_best_gate = fitness[best_idx]
+            global_best_mr = mr[best_idx]
+            global_best_circuit = circuits[best_idx]
 
         fitness_history_matrix[experiment_id][current_iter - 1] = global_best_gate
 
     return fitness_history_matrix, global_best_gate, global_best_circuit
 
+def _argbest(fitness, mr, legacy):
+    """np.argmin of the gate counts (legacy) or the lexicographic best (gate count asc, MR desc)."""
+    if legacy:
+        return np.argmin(fitness)
+    return min(range(len(fitness)), key=lambda i: (fitness[i], -mr[i]))
+
 # --- 1. Employed Bee Phase ---
-def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, trajectories, num_bees):
+# mr: per-food-source Moving-Rule reductions, updated in place alongside fitness.
+def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, trajectories, num_bees,
+                       mr, legacy=False):
     for i in range(num_bees):
         # Select a random neighbor j different from i
         j = random.choice([idx for idx in range(len(fitness)) if idx != i])
@@ -79,11 +101,12 @@ def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encodi
                                           (nbr1[j], nbr2[j], nbr3[j], nbr4[j]), num_bits )
 
         # Evaluation and Greedy Selection
-        new_per_circuit, new_fit = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories)
+        new_per_circuit, new_fit, new_mr = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories)
 
-        if new_fit < fitness[i]:
+        if rank_key(new_fit, new_mr, legacy) < rank_key(fitness[i], mr[i], legacy):
             nbr1[i], nbr2[i], nbr3[i], nbr4[i] = new_child
             fitness[i] = new_fit
+            mr[i] = new_mr
             circuits[i] = new_per_circuit
             trials[i] = 0
         else:
@@ -91,7 +114,8 @@ def employed_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encodi
     return nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials
 
 # --- 2. Onlooker Bee Phase ---
-def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, trajectories, num_bees):
+def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encoding_table, num_bits, trajectories, num_bees,
+                       mr, legacy=False):
 
     # Calculate probabilities (Proportional to quality; lower gate count = higher probability)
     # Using reciprocal transformation to handle minimization
@@ -108,11 +132,12 @@ def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encodi
         new_child = generate_abc_neighbor( (nbr1[i], nbr2[i], nbr3[i], nbr4[i]),
                                           (nbr1[j], nbr2[j], nbr3[j], nbr4[j]), num_bits )
 
-        new_per_circuit, new_fit = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories)
+        new_per_circuit, new_fit, new_mr = evaluate_abc_fitness(new_child, encoding_table, num_bits, trajectories)
 
-        if new_fit < fitness[i]:
+        if rank_key(new_fit, new_mr, legacy) < rank_key(fitness[i], mr[i], legacy):
             nbr1[i], nbr2[i], nbr3[i], nbr4[i] = new_child
             fitness[i] = new_fit
+            mr[i] = new_mr
             circuits[i] = new_per_circuit
             trials[i] = 0
         else:
@@ -122,7 +147,8 @@ def onlooker_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, encodi
     return nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials
 
 # --- 3. Scout Bee Phase ---
-def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, scout_targets, encoding_table, num_bits, trajectories):
+def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, scout_targets, encoding_table, num_bits, trajectories,
+                    mr):
     for i in scout_targets:
        # Abandon food source and re-initialize randomly (Scout behavior)
         # Mutation logic used here to achieve a "random jump" in the search space
@@ -157,7 +183,7 @@ def scout_bee_phase(nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials, scout_tar
 
 
         # Re-evaluate fitness for the new scouted solution
-        new_per_circuit, fitness[i] = evaluate_abc_fitness((nbr1[i], nbr2[i], nbr3[i], nbr4[i]), encoding_table, num_bits, trajectories)
+        new_per_circuit, fitness[i], mr[i] = evaluate_abc_fitness((nbr1[i], nbr2[i], nbr3[i], nbr4[i]), encoding_table, num_bits, trajectories)
         circuits[i] = new_per_circuit
         trials[i] = 0
     return nbr1, nbr2, nbr3, nbr4, fitness, circuits, trials
@@ -194,8 +220,8 @@ def generate_abc_neighbor(p1, p2, num_bits):
 
 def evaluate_abc_fitness(child, encoding_table, num_bits, trajectories):
     """
-    Decode and evaluate the gate count of a single candidate solution.
+    Decode and evaluate the gate count (and MR reductions) of a single candidate solution.
     """
     c1, c2, c3, c4 = child
     circuit_sols = decode_and_synthesize([c1], [c2], [c3], [c4], encoding_table, num_bits, 1, trajectories)
-    return circuit_sols[0][0], len(circuit_sols[0][0])
+    return circuit_sols[0][0], len(circuit_sols[0][0]), circuit_sols[0][2]

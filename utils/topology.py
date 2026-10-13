@@ -79,6 +79,15 @@ def solution_key(gate_count, mr_reductions):
     return (gate_count, -mr_reductions)
 
 
+def rank_key(gate_count, mr_reductions, legacy):
+    """
+    Comparison key used by the traditional algorithms: the plain gate count in legacy mode
+    (so every <, min, sort behaves exactly as before), otherwise solution_key(). Compare keys
+    with < / <= / min / sorted to get "strictly better" / "better or equal" / "best".
+    """
+    return gate_count if legacy else (gate_count, -mr_reductions)
+
+
 def is_better(gc_a, mr_a, gc_b, mr_b):
     """True if solution a is strictly better than b lexicographically
     (gate count ascending, then MR reductions descending)."""

@@ -208,6 +208,14 @@ Example Command:
 python main.py 3 1 1
 ```
 
+#### Algorithm Mode (`LEGACY_MODE` in `main.py`)
+
+* `LEGACY_MODE = False` (default): AE-QTS / QTS / QEA model every multi-qubit code of Layers 1-3 as one
+  categorical distribution over its $2^n$ values (update step δ/n per code, Layer 4 stays bitwise) and rank
+  neighbours by gate count with ties broken by more Moving-Rule reductions; GA / DE / TS / PSO / WOA / ABC
+  compare solutions lexicographically (gate count, then more Moving-Rule reductions).
+* `LEGACY_MODE = True`: the original behaviour (bitwise probabilities, gate-count-only comparisons).
+
 ## 📂 Experimental Results
 Upon execution, the system automatically creates a structured directory under exp/ to store comprehensive trial data. Each experiment generates two types of files: a Summary Report (.txt) for quick review and a Convergence Matrix (.xlsx) for deep statistical analysis.
 

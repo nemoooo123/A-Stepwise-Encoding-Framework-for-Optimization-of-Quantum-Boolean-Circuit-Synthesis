@@ -14,6 +14,22 @@ from core.GA import GA_run_single_experiment
 from core.ABC import ABC_run_single_experiment
 from core.WOA import WOA_run_single_experiment
 from core.QEA import QEA_run_single_experiment
+
+# ------------------------------------------------------------------------------------------
+# Algorithm-mode switch
+#   LEGACY_MODE = False (default): the "cat÷n + MR" behaviour
+#       * AE-QTS / QTS / QEA: every multi-qubit code of Layers 1-3 is ONE categorical
+#         distribution over its 2^n values (uniform start, roulette measurement, update step
+#         delta/n per code); Layer 4 stays bitwise. Neighbours are ranked by gate count with
+#         ties broken by MORE Moving-Rule reductions (gates removed by MR beyond adjacent
+#         cancellation). The global best is still tracked by gate count only.
+#       * GA / DE / TS / PSO / WOA / ABC: every comparison between solutions is
+#         lexicographic - gate count ascending, then MR reductions descending.
+#   LEGACY_MODE = True: the original behaviour (bitwise probabilities, gate-count-only
+#       comparisons) - same seed, same results as before the change.
+# ------------------------------------------------------------------------------------------
+LEGACY_MODE = False
+
 def main():
     """
     Main execution entry point for Reversible Circuit Synthesis experiments.
@@ -58,6 +74,7 @@ def main():
     max_iterations = 10000
     num_neighbors = 50  # Population size (N)
 
+    print(f"Mode: {'legacy (bitwise, gate count only)' if LEGACY_MODE else 'cat/n categorical + MR tie-break'}")
     print(f"Starting {num_experiments} experiments, each with {max_iterations} iterations...")
 
     # Pre-allocate matrix for convergence analysis (Rows: Experiments, Cols: Generations)
@@ -117,7 +134,8 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                delta_theta = 0.005
+                delta_theta = 0.005,
+                legacy = LEGACY_MODE
             )
 
         elif algo_choice == 2: # QTS (Quantum-Inspired Tabu Search)
@@ -142,7 +160,8 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                delta_theta = 0.01
+                delta_theta = 0.01,
+                legacy = LEGACY_MODE
             )
 
         elif algo_choice == 3: # QEA (Quantum Evolutionary Algorithm - Global Best Guided)
@@ -169,7 +188,8 @@ def main():
                 qindividuals4 = qindividuals4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                delta_theta = 0.0005  # Rotation step size for QEA state updates
+                delta_theta = 0.0005,  # Rotation step size for QEA state updates
+                legacy = LEGACY_MODE
             )
 
         elif algo_choice == 4: # GA (Genetic Algorithm)
@@ -197,7 +217,8 @@ def main():
                 target_output = target_output,
                 k=5,
                 pc=0.9, # crossover
-                pm=0.001 # mutation
+                pm=0.001,  # mutation
+                legacy = LEGACY_MODE
 
             )
         elif algo_choice == 5: # DE (Differential Evolution - A population-based stochastic global optimizer)
@@ -221,6 +242,7 @@ def main():
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
                 CR = 0.3,
+                legacy = LEGACY_MODE,
             )
         
         elif algo_choice == 6: # TS (Tubu Search)
@@ -243,7 +265,8 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                tabu_size = 150
+                tabu_size = 150,
+                legacy = LEGACY_MODE
             )
 
         elif algo_choice == 7: # PSO (Particle Swarm Optimization)
@@ -266,7 +289,8 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                w=0.6,c1=2.5,c2=1.0
+                w=0.6,c1=2.5,c2=1.0,
+                legacy = LEGACY_MODE
             )
 
         elif algo_choice == 8: # WOA (Whale Optimization Algorithm)
@@ -289,7 +313,8 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                b = 0.1  # Spiral Constant
+                b = 0.1,  # Spiral Constant
+                legacy = LEGACY_MODE
             )
 
         elif algo_choice == 9: # ABC(Artificial Bee Colony Algorithm)
@@ -313,7 +338,8 @@ def main():
                 pop_matrix4 = pop_matrix4,
                 fitness_history_matrix = fitness_history_matrix,
                 target_output = target_output,
-                limit = 40
+                limit = 40,
+                legacy = LEGACY_MODE
             )
 
         

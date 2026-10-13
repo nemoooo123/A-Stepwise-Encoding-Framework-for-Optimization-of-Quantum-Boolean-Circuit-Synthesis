@@ -23,6 +23,8 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
     Decodes hierarchical binary samples into decimal values and synthesizes
     quantum circuit routes for the entire population.
 
+    Returns a list of (circuit, gate_count, mr_reductions) tuples, one per individual.
+
     Args:
         pop_l1-l4: Binary samples for 4 layers.
         mapping_table: Constraint table for valid cycle lengths (encode_2_bit_table).
@@ -59,16 +61,36 @@ def decode_and_synthesize(pop_l1, pop_l2, pop_l3, pop_l4, mapping_table, num_uni
         # Synthesis: Transform decoded parameters into the final circuit structure
         # Passing Layer 4 directly as it is handled within the synthesize_route logic
         
-        individual_solution = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
-                                          pop_l4[i], num_units, trajectories)
-        
-        # Encapsulate synthesized circuit with its corresponding Gate Count and Path Continuity Fitness.
-        # Data structure: (Circuit_Object, Integer: Gate_Count, Float: Fitness_Score)
-        circuit_solutions.append((individual_solution,len(individual_solution)))
-        
+        individual_solution, mr_reductions = synthesize_route(decoded_l1, decoded_l2, decoded_l3,
+                                          pop_l4[i], num_units, trajectories, return_mr=True)
+
+        # Encapsulate synthesized circuit with its Gate Count and its Moving-Rule reductions.
+        # Data structure: (Circuit_Object, Integer: Gate_Count, Integer: MR_Reductions)
+        circuit_solutions.append((individual_solution, len(individual_solution), mr_reductions))
+
     return circuit_solutions
 
-def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories):
+
+def solution_key(gate_count, mr_reductions):
+    """
+    Lexicographic ranking key of a solution (smaller = better): fewer gates first, and among
+    equal gate counts MORE Moving-Rule reductions first.
+    """
+    return (gate_count, -mr_reductions)
+
+
+def is_better(gc_a, mr_a, gc_b, mr_b):
+    """True if solution a is strictly better than b lexicographically
+    (gate count ascending, then MR reductions descending)."""
+    return gc_a < gc_b or (gc_a == gc_b and mr_a > mr_b)
+
+
+def is_better_or_equal(gc_a, mr_a, gc_b, mr_b):
+    """Non-strict version of is_better (the '<=' acceptance rule, e.g. DE trial vs target)."""
+    return gc_a < gc_b or (gc_a == gc_b and mr_a >= mr_b)
+
+def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_sequences, num_units, trajectories,
+                     return_mr=False):
     """
     Synthesizes the final execution route by resolving cycle sequences and inter-cycle dependencies.
 
@@ -163,9 +185,8 @@ def synthesize_route(priority_weights, entry_points, mid_node_matrix, operation_
                     redundant_coupling_count += 1
 
     # Final assembly: Map the extracted trajectories and operators into a comprehensive reversible circuit description.
-    circuit = assemble_reversible_circuit(final_paths, final_ops, num_units)
-
-    return circuit
+    # With return_mr=True this returns (circuit, mr_reductions) instead of just the circuit.
+    return assemble_reversible_circuit(final_paths, final_ops, num_units, return_mr=return_mr)
 
 def initialize_solution_layer(data_structure):
     """
@@ -648,7 +669,7 @@ class _MRAccumulator:
     control-pattern integer per gate, as already used elsewhere in this module).
     """
 
-    __slots__ = ("gates", "targets", "ctrls", "vertex_stacks", "live")
+    __slots__ = ("gates", "targets", "ctrls", "vertex_stacks", "live", "adj")
 
     def __init__(self):
         self.gates = []          # cancelled slots become None, positions never reused
@@ -656,11 +677,28 @@ class _MRAccumulator:
         self.ctrls = []          # control-pattern int, target bit already cleared to 0
         self.vertex_stacks = {}  # vertex(int) -> stack of positions of live gates touching it
         self.live = 0
+        # Deletion rule ALONE (A*A=I on adjacent gates only, cascading), run side by side
+        # with the full accumulator: a plain stack of (ctrl, target) keys. Its final size is
+        # the gate count after adjacent cancellation; the accumulator's live count is the
+        # count after the Moving Rule as well, so the difference is what MR removed.
+        self.adj = []
+
+    def mr_reductions(self):
+        """Gates removed by the Moving Rule beyond what adjacent cancellation alone removes
+        (always >= 0 and even - gates disappear in identical pairs)."""
+        return len(self.adj) - self.live
 
     def push(self, gate, target_shift, ctrl, full_mask):
         base = ctrl & full_mask & ~(1 << target_shift)
         v0 = base
         v1 = base | (1 << target_shift)
+
+        key = (base, target_shift)
+        adj = self.adj
+        if adj and adj[-1] == key:
+            adj.pop()
+        else:
+            adj.append(key)
 
         stack0 = self.vertex_stacks.get(v0)
         if stack0 is None:
@@ -702,7 +740,7 @@ class _MRAccumulator:
         return gates, targets, ctrls
 
 
-def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, num_bits):
+def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, num_bits, return_mr=False):
     """
     Synthesizes a reversible logic circuit from state trajectories and gate transition sequences.
     Implements real-time gate cancellation (Identity Law: A * A = I) to minimize circuit depth,
@@ -715,7 +753,9 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
         num_bits (int): Total number of bits in the system.
 
     Returns:
-        tuple: (optimized_gate_list, total_raw_transitions)
+        list: optimized_gate_list, or (optimized_gate_list, mr_reductions) when return_mr is
+        True - mr_reductions = gates removed by the Moving Rule beyond what adjacent-only
+        cancellation removes (see _MRAccumulator.mr_reductions).
     """
     raw_step_transitions = []
     
@@ -789,6 +829,8 @@ def assemble_reversible_circuit(state_trajectories, transition_sequence_matrix, 
 
     optimized_gate_list, gate_targets, gate_ctrls = acc.result()
 
+    if return_mr:
+        return optimized_gate_list, acc.mr_reductions()
     return optimized_gate_list
 
 def verify_circuit_logic(optimized_gates, num_bits, target_truth_table):

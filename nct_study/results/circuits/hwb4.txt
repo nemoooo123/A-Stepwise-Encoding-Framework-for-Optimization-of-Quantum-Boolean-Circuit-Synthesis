@@ -1,0 +1,34 @@
+# hwb4: strict NCT circuit, 12 gates, QC 28, no ancilla, verified on all 16 inputs: True
+# line x0 = most significant bit; gates are applied top to bottom
+# gate format: 1 = control, 2 = unused, 3 = target
+
+ 1. CNOT(x1 -> x0)           [3, 1, 2, 2]
+ 2. TOF(x1,x3 -> x0)         [3, 1, 2, 1]
+ 3. CNOT(x3 -> x1)           [2, 3, 2, 1]
+ 4. TOF(x1,x3 -> x2)         [2, 1, 3, 1]
+ 5. CNOT(x0 -> x2)           [1, 2, 3, 2]
+ 6. CNOT(x2 -> x1)           [2, 3, 1, 2]
+ 7. TOF(x0,x2 -> x3)         [1, 2, 1, 3]
+ 8. TOF(x1,x3 -> x0)         [3, 1, 2, 1]
+ 9. CNOT(x1 -> x2)           [2, 1, 3, 2]
+10. CNOT(x2 -> x3)           [2, 2, 1, 3]
+11. CNOT(x3 -> x1)           [2, 3, 2, 1]
+12. CNOT(x0 -> x2)           [1, 2, 3, 2]
+
+truth table check:
+  0000 -> 0000   (target 0000) OK
+  0001 -> 0010   (target 0010) OK
+  0010 -> 0100   (target 0100) OK
+  0011 -> 1100   (target 1100) OK
+  0100 -> 1000   (target 1000) OK
+  0101 -> 0101   (target 0101) OK
+  0110 -> 1001   (target 1001) OK
+  0111 -> 1011   (target 1011) OK
+  1000 -> 0001   (target 0001) OK
+  1001 -> 0110   (target 0110) OK
+  1010 -> 1010   (target 1010) OK
+  1011 -> 1101   (target 1101) OK
+  1100 -> 0011   (target 0011) OK
+  1101 -> 1110   (target 1110) OK
+  1110 -> 0111   (target 0111) OK
+  1111 -> 1111   (target 1111) OK

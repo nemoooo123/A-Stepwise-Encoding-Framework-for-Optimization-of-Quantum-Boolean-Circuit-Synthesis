@@ -1,0 +1,19 @@
+# nth_prime4_inc: strict NCT, 13 gates, QC 45
+.v a,b,c,d
+.i a,b,c,d
+.o a,b,c,d
+BEGIN
+t3 c,d,b
+t3 b,c,d
+t3 a,d,b
+t2 a,b
+t3 b,c,a
+t2 b,a
+t3 b,c,d
+t2 d,c
+t3 a,b,c
+t3 a,d,b
+t3 b,c,a
+t2 c,d
+t2 a,c
+END

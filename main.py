@@ -14,6 +14,7 @@ from core.GA import GA_run_single_experiment
 from core.ABC import ABC_run_single_experiment
 from core.WOA import WOA_run_single_experiment
 from core.QEA import QEA_run_single_experiment
+from nct_study import postprocess as nct_post
 
 # ------------------------------------------------------------------------------------------
 # Algorithm-mode switch
@@ -29,6 +30,24 @@ from core.QEA import QEA_run_single_experiment
 #       comparisons) - same seed, same results as before the change.
 # ------------------------------------------------------------------------------------------
 LEGACY_MODE = False
+
+# ------------------------------------------------------------------------------------------
+# NCT post-processing (nct_study/postprocess.py) - runs after all trials, search unchanged
+#   NCT_CONVERT          : convert every trial's best MPMCT circuit to strict NCT
+#                          (merge -> Barenco decomposition -> deletion/MR + window resynthesis)
+#                          and report NCT gate count / quantum cost (NOT = CNOT = 1, TOF = 5)
+#   NCT_WINDOW4          : also use 4-line window resynthesis (slow table build, small gain)
+#   NCT_VERIFY_MAX_LINES : simulate-check NCT circuits with at most this many lines
+#   NCT_OPTIMAL          : 3 / 4 bits only - replace the converted circuit by an OPTIMAL NCT
+#                          circuit (Shende et al. 2003, Sec. 4: BFS library + meet in the middle).
+#                          3 bits: always optimal. 4 bits: exact whenever the optimum is <= 12
+#                          gates and the function is even; otherwise the conversion is kept.
+#                          4 bits needs ~100 s and a few hundred MB once per run.
+# ------------------------------------------------------------------------------------------
+NCT_CONVERT = True
+NCT_WINDOW4 = False
+NCT_VERIFY_MAX_LINES = 12
+NCT_OPTIMAL = True
 
 def main():
     """
@@ -366,6 +385,18 @@ def main():
     final_avg = average_convergence_curve[-1]
     final_std = std_convergence_curve[-1]
 
+    # --- NCT post-processing: convert each trial's best circuit to strict NCT ---
+    nct_results = None
+    if NCT_CONVERT:
+        print("\n[NCT] Converting each trial's best circuit to strict NCT...")
+        nct_tables = nct_post.build_tables(window4=NCT_WINDOW4)
+        nct_optimal = nct_post.build_optimal(num_bits) if NCT_OPTIMAL else None
+        nct_results = nct_post.convert_trials(best_circuit_per_experiment, num_bits, nct_tables,
+                                              verify_max_lines=NCT_VERIFY_MAX_LINES,
+                                              optimal=nct_optimal)
+        del nct_optimal  # free the library (hundreds of MB for 4 bits)
+        nct_best = nct_post.best_index(nct_results)
+
 # --- Automatic Directory and Filename Creation ---
     # Algorithm mapping: mapping choice ID to descriptive names
     algo_names = {
@@ -397,6 +428,41 @@ def main():
         f.write("-" * 40 + "\n")
         f.write(f"Best Circuit Structure:\n{absolute_best_circuit}\n")
         f.write("========================================\n")
+        if nct_results is not None:
+            nct_gates = [r["nct_gates"] for r in nct_results]
+            nct_qc = [r["qc"] for r in nct_results]
+            nb = nct_results[nct_best]
+            failed = sum(1 for r in nct_results if r["verified"] is False)
+            unchecked = sum(1 for r in nct_results if r["verified"] is None)
+            f.write("      NCT POST-PROCESSING (strict NCT)   \n")
+            f.write("========================================\n")
+            f.write(f"Window resynthesis: 3-line{' + 4-line' if NCT_WINDOW4 else ''}\n")
+            n_opt = sum(1 for r in nct_results if r["method"] == "optimal")
+            if NCT_OPTIMAL and num_bits in (3, 4):
+                f.write(f"Optimal synthesis (Shende et al. 2003): {n_opt}/{len(nct_results)} trials "
+                        f"{'(optimum found)' if n_opt else '(not found: odd function or optimum > 12 gates)'}\n")
+            f.write(f"Converted NCT Gate Counts per Trial (before optimal synthesis): "
+                    f"{[r['converted_gates'] for r in nct_results]}\n")
+            f.write(f"NCT Gate Counts per Trial: {nct_gates}\n")
+            f.write(f"NCT Quantum Cost per Trial (NOT=CNOT=1, TOF=5): {nct_qc}\n")
+            f.write(f"NCT Gates: {np.mean(nct_gates):.2f} ± {np.std(nct_gates):.2f} | "
+                    f"QC: {np.mean(nct_qc):.2f} ± {np.std(nct_qc):.2f}\n")
+            f.write(f"Best NCT: Trial {nct_best + 1} | MPMCT {best_scores_per_experiment[nct_best]} -> "
+                    f"NCT {nb['nct_gates']} gates, QC {nb['qc']}, lines {nb['lines']} "
+                    f"(dirty ancilla {nb['ancilla']})\n")
+            f.write(f"Verification: {len(nct_results) - failed - unchecked} ok, {failed} failed, "
+                    f"{unchecked} skipped (> {NCT_VERIFY_MAX_LINES} lines)\n")
+            f.write(f"Best NCT circuit (.tfc): {base_filename}_NCT.tfc\n")
+            f.write("========================================\n")
+
+    if nct_results is not None:
+        tfc_path = os.path.join(save_dir, f"{base_filename}_NCT.tfc")
+        nb = nct_results[nct_best]
+        with open(tfc_path, "w", encoding="utf-8") as f:
+            f.write(nct_post.to_tfc(nb["nct"], nb["lines"], nb["ancilla"],
+                                    f"{base_filename} trial {nct_best + 1}: {nb['nct_gates']} NCT gates, "
+                                    f"QC {nb['qc']}, verified {nb['verified']}"))
+        print(f"[NCT] Best: trial {nct_best + 1}, {nb['nct_gates']} gates, QC {nb['qc']} -> {tfc_path}")
 
     # --- Generate Detailed Excel Data (Pandas) ---
     # This file stores the full convergence matrix for statistical plotting and verification

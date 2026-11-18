@@ -1,0 +1,18 @@
+# 4_49: strict NCT, 12 gates, QC 32
+.v a,b,c,d
+.i a,b,c,d
+.o a,b,c,d
+BEGIN
+t2 b,d
+t1 d
+t3 c,d,a
+t2 d,a
+t3 a,b,c
+t2 a,d
+t3 a,d,b
+t3 b,c,d
+t3 c,d,a
+t2 a,b
+t2 a,c
+t1 d
+END
